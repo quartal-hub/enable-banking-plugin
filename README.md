@@ -7,7 +7,8 @@ Apps widget) and as a REST API.
 
 > **Status: sandbox prototype.** The plugin runs anonymously, keeps pending authorizations in
 > memory and is tested against Enable Banking's sandbox only. Do not deploy it for real bank data
-> before per-user authentication is in place. See [Limitations](#limitations).
+> before the per-user authentication in [docs/user-authentication.md](docs/user-authentication.md)
+> is in place. See [Limitations](#limitations).
 
 ## Tools
 
@@ -143,6 +144,6 @@ styles (DataTables, Tabulator), which these widgets do not use.
 - **No payments:** account information only, no payment initiation. Nothing revokes a session
   either; it expires after the requested 90 days.
 
-Per-user authentication, which fixes the first three, is planned.
+The plan to fix the first three: [docs/user-authentication.md](docs/user-authentication.md).
 A framework workaround in the code (`notFound` status) is explained in
 [docs/bank-connection.md](docs/bank-connection.md#framework-workarounds).

@@ -2,8 +2,8 @@
 
 How a user connects a bank account through [Enable Banking](https://enablebanking.com) and how
 the plugin's tools then read accounts, balances and transactions. This describes the current,
-**anonymous** implementation (`auth: "anon"` in `qrtl.config.ts`); per-user authentication is
-planned.
+**anonymous** implementation (`auth: "anon"` in `qrtl.config.ts`). The plan for per-user
+authentication is in [user-authentication.md](./user-authentication.md).
 
 ## Parts
 
