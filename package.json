@@ -17,6 +17,7 @@
     "@quartal/plugin": "^1.0.0",
     "astro": "^7.0.0",
     "jose": "^6.2.15",
+    "lru-cache": "^11.5.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },

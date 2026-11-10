@@ -1,0 +1,70 @@
+---
+// Enable Banking redirects the user's browser here after bank authorization, with `code` and
+// `state` (or `error`) in the query string. Exchanges the code for a session and stores the outcome
+// for `getAuthorizationResult`. Astro escapes every value rendered below.
+import {
+  completeAuthorization,
+  failAuthorization,
+  getPendingAuthorization,
+} from "../../enable-banking/AuthorizationStore.ts";
+import { enableBankingRequest } from "../../enable-banking/EnableBankingClient.ts";
+import { type RawAccount, toAccount } from "../../enable-banking/toAccount.ts";
+
+export const prerender = false;
+
+const params = Astro.url.searchParams;
+const state = params.get("state") ?? "";
+const pending = getPendingAuthorization(state);
+let title = "Unknown or expired request";
+let message = "Start connecting the bank again from the chat.";
+let status = 400;
+
+if (pending) {
+  const error = params.get("error");
+  const code = params.get("code");
+  if (error || !code) {
+    const description = params.get("error_description");
+    message = error ? (description ? `${error}: ${description}` : error) : "The bank returned no code.";
+    title = "Bank connection was not completed";
+    failAuthorization(state, message);
+  } else {
+    try {
+      const session = await enableBankingRequest<{ session_id: string; accounts: RawAccount[] }>(
+        "POST",
+        "/sessions",
+        { code },
+      );
+      const accounts = session.accounts.map(toAccount);
+      completeAuthorization(state, session.session_id, accounts);
+      title = `${pending.bank} connected`;
+      const shared = accounts.length
+        ? `${accounts.length} account${accounts.length === 1 ? "" : "s"} shared.`
+        : "The bank shared no accounts.";
+      message = `${shared} You can close this tab and return to the chat.`;
+      status = 200;
+    } catch (e) {
+      message = e instanceof Error ? e.message : String(e);
+      title = "Bank connection failed";
+      failAuthorization(state, message);
+      status = 502;
+    }
+  }
+}
+Astro.response.status = status;
+Astro.response.headers.set("Cache-Control", "no-store");
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 40rem; margin: 3rem auto; padding: 0 1rem; }
+    </style>
+  </head>
+  <body>
+    <h1>{title}</h1>
+    <p>{message}</p>
+  </body>
+</html>
