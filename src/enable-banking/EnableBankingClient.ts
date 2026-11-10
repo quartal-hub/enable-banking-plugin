@@ -1,5 +1,6 @@
 import { Helpers } from "@quartal/plugin";
 import { importPKCS8, SignJWT } from "jose";
+import { errorFromResponse } from "./EnableBankingError.ts";
 
 /** Enable Banking API base URL. The same host serves sandbox and production; the app decides which. */
 const API_BASE = "https://api.enablebanking.com";
@@ -37,7 +38,7 @@ export async function enableBankingRequest<T>(
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const text = await res.text();
-  if (!res.ok) throw new Error(`Enable Banking ${method} ${path.split("?")[0]} failed (${res.status}): ${text}`);
+  if (!res.ok) throw errorFromResponse(res.status, text, method, path);
   return (text ? JSON.parse(text) : undefined) as T;
 }
 
