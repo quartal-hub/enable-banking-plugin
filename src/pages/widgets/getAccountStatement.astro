@@ -1,0 +1,8 @@
+---
+// The widget page for the `getAccountStatement` tool (the file name is the tool id).
+import WidgetLayout from "../../layouts/WidgetLayout.astro";
+import AccountStatement from "../../components/AccountStatement.tsx";
+---
+<WidgetLayout title="Account statement">
+  <AccountStatement client:only="react" />
+</WidgetLayout>
