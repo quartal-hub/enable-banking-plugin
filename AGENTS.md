@@ -33,15 +33,11 @@ Agent Plugins manifest at `/plugin.json`.
   `@format`, `@example` and `@visibility`. Never hand-write JSON Schema and never add a schema
   library (zod etc.); improve the types and JSDoc instead.
 - **Widgets** are Astro pages in `src/pages/widgets/`; a page's file name must be the id of
-  the tool it visualizes (`sayHello.astro` is the UI for the `sayHello` tool).
+  the tool it visualizes (`listInvoices.astro` is the UI for a `listInvoices` tool).
 - **Skills**: to ship know-how alongside the tools, add folders with a `SKILL.md` under
   `skills/`.
 - **Plugin options** (title, description, auth, deploy) live in `qrtl.config.ts`.
 - **Auth**: this plugin is anonymous (`auth: "anon"` in `qrtl.config.ts`).
-
-`src/tools/HelloWorld.ts` is scaffolded sample code — replace it with real tools and update
-the export in `src/tools/mod.ts`. Rename `src/pages/widgets/sayHello.astro` to match the
-replacement tool's id (or delete it).
 
 ## Verify changes
 
