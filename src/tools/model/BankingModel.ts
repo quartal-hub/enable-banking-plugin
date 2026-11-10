@@ -51,3 +51,46 @@ export interface Account {
   /** Account type code, e.g. `CACC` (current account) or `CARD` (card account) */
   type?: string;
 }
+
+/** One account transaction */
+export interface Transaction {
+  /** Amount as a signed decimal string: negative for money out, positive for money in */
+  amount: string;
+  /** Currency code */
+  currency: string;
+  /**
+   * Date the transaction was booked
+   * @format date
+   */
+  bookingDate?: string;
+  /**
+   * Value date
+   * @format date
+   */
+  valueDate?: string;
+  /** The other party: the payee for money out, the payer for money in */
+  counterparty?: string;
+  /** Message or reference text */
+  description?: string;
+  /** `BOOK` (booked) or `PDNG` (pending) */
+  status?: string;
+  /** The bank's reference for the transaction */
+  reference?: string;
+}
+
+/** One balance of an account */
+export interface Balance {
+  /** Balance name given by the bank */
+  name?: string;
+  /** Balance type code, e.g. `CLBD` (closing booked) or `ITAV` (interim available) */
+  type: string;
+  /** Amount as a decimal string */
+  amount: string;
+  /** Currency code */
+  currency: string;
+  /**
+   * Date the balance applies to
+   * @format date
+   */
+  referenceDate?: string;
+}
