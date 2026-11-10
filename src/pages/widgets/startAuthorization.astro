@@ -1,0 +1,9 @@
+---
+// A widget page's file name is the id of the tool it visualizes: this page is the UI
+// for the `startAuthorization` tool.
+import WidgetLayout from "../../layouts/WidgetLayout.astro";
+import StartAuthorization from "../../components/StartAuthorization.tsx";
+---
+<WidgetLayout title="Connect bank">
+  <StartAuthorization client:only="react" />
+</WidgetLayout>
