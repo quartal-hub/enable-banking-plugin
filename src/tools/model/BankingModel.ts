@@ -78,6 +78,64 @@ export interface Transaction {
   reference?: string;
 }
 
+/** An account statement (tiliote) for a period */
+export interface AccountStatement {
+  /** The account */
+  account: Account;
+  /** Currency of all amounts */
+  currency: string;
+  /**
+   * First day of the period
+   * @format date
+   */
+  periodStart: string;
+  /**
+   * Last day of the period (at most the date of the bank's current balance)
+   * @format date
+   */
+  periodEnd: string;
+  /** Balance before the first day of the period, as a decimal string */
+  openingBalance: string;
+  /** Balance at the end of the last day of the period */
+  closingBalance: string;
+  /** Sum of money in during the period (positive) */
+  totalIn: string;
+  /** Sum of money out during the period (positive) */
+  totalOut: string;
+  /** Closing balance minus opening balance */
+  netChange: string;
+  /** Booked transactions of the period, oldest first, each with the balance after it */
+  lines: StatementLine[];
+  /** Pending (not yet booked) transactions; not included in the balances */
+  pending: Transaction[];
+  /** Remarks about how the statement was calculated, for the reader */
+  notes: string[];
+  /**
+   * When the statement was produced
+   * @format date-time
+   */
+  generatedAt: string;
+}
+
+/** One booked transaction on an account statement */
+export interface StatementLine {
+  /**
+   * Booking date
+   * @format date
+   */
+  date: string;
+  /** The other party: the payee for money out, the payer for money in */
+  counterparty?: string;
+  /** Message or reference text */
+  description?: string;
+  /** Signed amount: negative for money out */
+  amount: string;
+  /** Balance after this transaction */
+  balance: string;
+  /** The bank's reference for the transaction */
+  reference?: string;
+}
+
 /** One balance of an account */
 export interface Balance {
   /** Balance name given by the bank */
