@@ -11,7 +11,7 @@ planned.
 |---|---|---|
 | API client | `src/enable-banking/EnableBankingClient.ts` | Calls `https://api.enablebanking.com` with an RS256 JWT signed by the application's private key with `jose` (`kid` = application id). The token is cached for an hour. |
 | Authorization store | `src/enable-banking/AuthorizationStore.ts` | Started authorizations keyed by the random `state` sent to the bank, and their outcome (session id and accounts, or an error). In memory, kept 30 minutes. |
-| Tools | `src/tools/EnableBanking.ts` | `listBanks`, `startAuthorization`, `getAuthorizationResult`, `listAccounts`, `getAccountStatement`. |
+| Tools | `src/tools/EnableBanking.ts` | `listBanks`, `startAuthorization`, `getAuthorizationResult`, `listAccounts`, `getAccountStatement` (and the widget-only `createStatementPrintLink`). |
 | Callback | `src/pages/enable-banking/callback.astro` | The redirect URL registered with Enable Banking. Exchanges the authorization code for a session and stores the outcome. A plain Astro page (which escapes everything it renders) outside the plugin's reserved paths (`/api`, `/mcp`, `/oauth`, …). |
 | Widget | `src/components/StartAuthorization.tsx` (page `src/pages/widgets/startAuthorization.astro`) | The **Connect bank** button for `startAuthorization`: opens the bank login through the MCP host. |
 

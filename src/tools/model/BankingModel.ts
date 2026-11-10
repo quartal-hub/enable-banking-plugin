@@ -117,6 +117,12 @@ export interface AccountStatement {
   generatedAt: string;
 }
 
+/** A short-lived link to the printable account statement page */
+export interface StatementPrintLink {
+  /** URL of the printable statement; opens the print dialog */
+  url: string;
+}
+
 /** One booked transaction on an account statement */
 export interface StatementLine {
   /**

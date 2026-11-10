@@ -1,0 +1,55 @@
+---
+// The printable account statement, opened in a browser tab by the Account statement widget's print
+// button (MCP hosts block the print dialog inside widgets). The short-lived `token` from
+// createStatementPrintLink names the account and period; the statement is built fresh here.
+import StatementView from "../../components/StatementView.tsx";
+import { SKIN_URL } from "../../../qrtl.config.ts";
+import { resolvePrintToken } from "../../enable-banking/PrintLinks.ts";
+import { EnableBanking } from "../../tools/EnableBanking.ts";
+import type { AccountStatement } from "../../tools/model/BankingModel.ts";
+
+export const prerender = false;
+
+const target = resolvePrintToken(Astro.url.searchParams.get("token") ?? "");
+let statement: AccountStatement | undefined;
+let error: string | undefined;
+if (!target) {
+  error = "This print link is unknown or has expired (links work for 10 minutes). Use the print button in the chat again.";
+  Astro.response.status = 404;
+} else {
+  try {
+    statement = await EnableBanking.getAccountStatement(target);
+  } catch (e) {
+    error = e instanceof Error ? e.message : String(e);
+    Astro.response.status = 502;
+  }
+}
+Astro.response.headers.set("Cache-Control", "no-store");
+Astro.response.headers.set("Referrer-Policy", "no-referrer");
+---
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>{statement ? `Account statement ${statement.periodStart} – ${statement.periodEnd}` : "Account statement"}</title>
+    <link rel="stylesheet" href={SKIN_URL} />
+    <style is:inline>@page { margin: 15mm; }</style>
+  </head>
+  <body>
+    {statement ? (
+      <>
+        <div class="px-3 pt-3 d-print-none">
+          <button type="button" class="btn btn-primary" onclick="window.print()">
+            <i class="bi bi-printer me-2" aria-hidden="true"></i>Print / save as PDF
+          </button>
+        </div>
+        <StatementView statement={statement} />
+        <script is:inline>window.addEventListener("load", () => window.print());</script>
+      </>
+    ) : (
+      <div class="alert alert-warning m-3" role="alert">{error}</div>
+    )}
+  </body>
+</html>

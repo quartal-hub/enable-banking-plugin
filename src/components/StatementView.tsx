@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { AccountStatement } from "../tools/model/BankingModel.ts";
 
 /** ISO 20022 cash account type codes, as readable labels */
@@ -13,15 +14,21 @@ const ACCOUNT_TYPES: Record<string, string> = {
 /** Styles Bootstrap does not cover; everything else comes from the skin's Bootstrap classes */
 const CSS = `
 .q-statement .num { font-variant-numeric: tabular-nums; }
+@media print {
+  .q-statement tr { break-inside: avoid; }
+  .q-statement .bg-body-tertiary, .q-statement .table-light { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+}
 `;
 
 /**
  * An account statement (tiliote) as a document: header, summary, transactions with the running
- * balance, pending transactions and notes. Presentational only (no connection to the MCP host),
- * styled with Bootstrap classes from the plugin's skin.
+ * balance, pending transactions and notes. Presentational only, so it renders the same in the
+ * widget and on the server-rendered print page; styled with Bootstrap classes from the skin.
  */
 export default function StatementView(props: {
   statement: AccountStatement;
+  /** Buttons shown above the statement (not printed) */
+  actions?: ReactNode;
 }) {
   const s = props.statement;
   const money = (amount: string) =>
@@ -43,6 +50,7 @@ export default function StatementView(props: {
   return (
     <div className="q-statement p-3">
       <style>{CSS}</style>
+      {props.actions ? <div className="d-flex flex-wrap align-items-center gap-2 mb-3 d-print-none">{props.actions}</div> : null}
 
       <div className="d-flex flex-wrap justify-content-between gap-3 border-bottom border-2 pb-2 mb-3">
         <div>

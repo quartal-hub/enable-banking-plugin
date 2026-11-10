@@ -32,8 +32,12 @@ transaction since the period start; the statement's `notes` say which balance it
 from and warn when not all transaction pages could be fetched. A period reaching past the balance
 date ends at that date. The calculation is in `src/enable-banking/buildAccountStatement.ts`.
 
-The widget shows the statement as a document (English labels); the layout is in
-`src/components/StatementView.tsx`.
+The widget shows the statement as a document (English labels). MCP hosts run widgets in a
+sandboxed iframe that blocks the print dialog, so its **Print / save as PDF** button calls the
+widget-only tool `createStatementPrintLink` (`@visibility app`) and opens the returned link in a
+browser tab: `/enable-banking/statement?token=…` renders the same statement on the server and opens
+the print dialog. The token is random and works for 10 minutes; the account id is not in the URL.
+The layout is shared by both (`src/components/StatementView.tsx`).
 
 ## Setup
 
@@ -112,7 +116,8 @@ styles (DataTables, Tabulator), which these widgets do not use.
 | `src/layouts/WidgetLayout.astro` | The widget layout, which links the skin (`SKIN_URL` in `qrtl.config.ts`). |
 | `src/enable-banking/buildAccountStatement.ts` | Account statement calculation (balances worked back from the current balance, in cents). |
 | `src/components/AccountStatement.tsx`, `src/pages/widgets/getAccountStatement.astro` | The Account statement widget (React). |
-| `src/components/StatementView.tsx` | The statement layout. |
+| `src/components/StatementView.tsx` | The statement layout, shared by the widget and the print page. |
+| `src/pages/enable-banking/statement.astro`, `src/enable-banking/PrintLinks.ts` | The printable statement page and its short-lived links. |
 
 ## Limitations
 

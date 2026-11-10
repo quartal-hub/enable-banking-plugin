@@ -7,6 +7,7 @@ import {
   linkAuthorizationId,
 } from "../enable-banking/AuthorizationStore.ts";
 import { buildAccountStatement } from "../enable-banking/buildAccountStatement.ts";
+import { createPrintToken } from "../enable-banking/PrintLinks.ts";
 import { type RawAccount, toAccount } from "../enable-banking/toAccount.ts";
 import { type RawBalance, toBalance } from "../enable-banking/toBalance.ts";
 import { type RawTransaction, toTransaction } from "../enable-banking/toTransaction.ts";
@@ -16,6 +17,7 @@ import type {
   AuthorizationResult,
   AuthorizationStart,
   Bank,
+  StatementPrintLink,
 } from "./model/BankingModel.ts";
 
 /** Where Enable Banking sends the user's browser back to. Must match a registered redirect URL. */
@@ -122,7 +124,7 @@ export class EnableBanking {
 
   /**
    * Builds an account statement (tiliote) for a period: opening and closing balance, every booked
-   * transaction with the running balance, and totals of money in and out. Shown as a
+   * transaction with the running balance, and totals of money in and out. Shown as a printable
    * statement by its widget. Use it when the user asks for a statement or an overview of a period.
    * @param input The account and period
    * @returns The statement
@@ -161,7 +163,37 @@ export class EnableBanking {
       today: isoDate(new Date()),
     });
   }
+
+  /**
+   * Creates a short-lived link to a printable page of an account statement, for the Account
+   * statement widget's print button (widgets cannot open the print dialog themselves)
+   * @param input The account and period, as in `getAccountStatement`
+   * @returns The link, valid for 10 minutes
+   * @visibility app
+   * @destructive false
+   */
+  static createStatementPrintLink(input: {
+    /** Account `uid` from `listAccounts` */
+    accountId: string;
+    /**
+     * First day of the period
+     * @format date
+     */
+    dateFrom: string;
+    /**
+     * Last day of the period
+     * @format date
+     */
+    dateTo: string;
+  }): StatementPrintLink {
+    const url = new URL(PRINT_PATH, redirectUrl());
+    url.searchParams.set("token", createPrintToken(input));
+    return { url: url.href };
+  }
 }
+
+/** Path of the printable statement page (`src/pages/enable-banking/statement.astro`) */
+const PRINT_PATH = "/enable-banking/statement";
 
 /** Upper limit of transaction pages fetched for one statement */
 const MAX_STATEMENT_PAGES = 50;
