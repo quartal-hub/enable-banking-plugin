@@ -1,11 +1,13 @@
 import { Helpers } from "@quartal/plugin";
 import { enableBankingRequest } from "../enable-banking/EnableBankingClient.ts";
+import { sessionEndedError } from "../enable-banking/EnableBankingError.ts";
 import {
   createAuthorizationState,
   findAuthorizationResult,
   linkAuthorizationId,
 } from "../enable-banking/AuthorizationStore.ts";
-import type { AuthorizationResult, AuthorizationStart, Bank } from "./model/BankingModel.ts";
+import { type RawAccount, toAccount } from "../enable-banking/toAccount.ts";
+import type { Account, AuthorizationResult, AuthorizationStart, Bank } from "./model/BankingModel.ts";
 
 /** Where Enable Banking sends the user's browser back to. Must match a registered redirect URL. */
 const CALLBACK_PATH = "/enable-banking/callback";
@@ -82,6 +84,31 @@ export class EnableBanking {
     authorizationId: string;
   }): AuthorizationResult {
     return findAuthorizationResult(input.authorizationId);
+  }
+
+  /**
+   * Lists the accounts of a connected bank session
+   * @param input The session
+   * @returns The accounts
+   * @readOnly
+   */
+  static async listAccounts(input: {
+    /** Session id shown after connecting a bank */
+    sessionId: string;
+  }): Promise<Account[]> {
+    // The session lists account ids only; name, IBAN and currency come from each account's details.
+    const session = await enableBankingRequest<{ status?: string; accounts?: string[] }>(
+      "GET",
+      `/sessions/${encodeURIComponent(input.sessionId)}`,
+    );
+    // A closed or expired session still answers here; only its account calls fail.
+    if (session.status && session.status !== "AUTHORIZED") throw sessionEndedError(session.status);
+    const details = await Promise.all(
+      (session.accounts ?? []).map((uid) =>
+        enableBankingRequest<RawAccount>("GET", `/accounts/${encodeURIComponent(uid)}/details`),
+      ),
+    );
+    return details.map(toAccount);
   }
 }
 
