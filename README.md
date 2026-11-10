@@ -1,14 +1,19 @@
 # Enable Banking Plugin
 
+> **Under construction: authentication is not implemented.** `qrtl.config.ts` already sends MCP
+> clients to the Quartal test Keycloak to log in, but logging in does not work yet (Keycloak
+> rejects the clients' dynamic registration), and the tools do not tie bank connections to the
+> logged-in user. The plan: [docs/user-authentication.md](docs/user-authentication.md).
+
 Bank account information for AI agents through [Enable Banking](https://enablebanking.com): an
 agent connects the user's bank account and reads accounts, balances and transactions. Built with
 [Quartal Plugins](https://plugin.quartal.com), so the same tools are served over MCP (with an MCP
 Apps widget) and as a REST API.
 
-> **Status: sandbox prototype.** The plugin runs anonymously, keeps pending authorizations in
-> memory and is tested against Enable Banking's sandbox only. Do not deploy it for real bank data
-> before the per-user authentication in [docs/user-authentication.md](docs/user-authentication.md)
-> is in place. See [Limitations](#limitations).
+> **Status: sandbox prototype.** The plugin keeps pending authorizations in memory and is tested
+> against Enable Banking's sandbox only. Do not deploy it for real bank data before the per-user
+> authentication in [docs/user-authentication.md](docs/user-authentication.md) is in place. See
+> [Limitations](#limitations).
 
 ## Tools
 
@@ -75,9 +80,12 @@ The plugin runs on <http://localhost:4321>: docs and REST tester at `/`, the MCP
 ### Try it with an agent
 
 - [MCPJam](https://www.mcpjam.com/): `npx @mcpjam/inspector@latest`, add the server
-  `http://localhost:4321/mcp` (HTTP, no auth) and use the **Playground** chat, which renders the
+  `http://localhost:4321/mcp` (HTTP, OAuth) and use the **Playground** chat, which renders the
   widget.
 - Claude Code: `claude mcp add --transport http enable-banking http://localhost:4321/mcp`.
+
+Both log in at the Quartal test Keycloak, which does not work yet (see the notice at the top).
+Until it does, set `auth: "anon"` in `qrtl.config.ts` to connect without logging in.
 
 Then ask, for example: *"Connect my bank: Mock ASPSP in Finland"*, and after approving:
 *"What's my balance, and how much did I spend on groceries this month?"*
@@ -131,9 +139,11 @@ styles (DataTables, Tabulator), which these widgets do not use.
 
 ## Limitations
 
-- **No authentication.** Anyone who can reach the plugin can call every tool. Enable Banking only
-  accepts a session or account id together with the application's private key, but the plugin
-  holds that key, so through the plugin an id alone is enough to read someone's data.
+- **No per-user authentication.** The REST API and `/mcp` require a token from the Quartal test
+  Keycloak (and logging in does not work yet), but any logged-in user can call every tool for any
+  connection. Enable Banking only accepts a session or account id together with the application's
+  private key, but the plugin holds that key, so through the plugin an id alone is enough to read
+  someone's data.
 - **The session id passes through the conversation**, and a new conversation does not know about
   earlier connections.
 - **In-memory state:** a restart loses pending authorizations, and several instances would not
