@@ -41,6 +41,13 @@ browser tab: `/enable-banking/statement?token=…` renders the same statement on
 the print dialog. The token is random and works for 10 minutes; the account id is not in the URL.
 The layout is shared by both (`src/components/StatementView.tsx`).
 
+### Agent skill
+
+The **`bank-accounts`** [Agent Skill](https://agentskills.io/) (`skills/bank-accounts/SKILL.md`) is
+the playbook for agents: when to connect a bank, how to read balances and signed amounts, paging,
+spending summaries, errors and privacy. It is served at `/skills/catalog.json` and included in
+`/plugin.zip`.
+
 ## Setup
 
 Requirements: Node.js 22.23.4 or later (Astro 7), pnpm 11.
