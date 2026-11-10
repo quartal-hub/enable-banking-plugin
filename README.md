@@ -82,6 +82,7 @@ styles (DataTables, Tabulator), which these widgets do not use.
 | `pnpm dev` | Dev server on port 4321 (loads `.env`). |
 | `pnpm typecheck` | `astro check` (TypeScript 6; see the `@emnapi/runtime` override in `pnpm-workspace.yaml`). |
 | `pnpm lint` | ESLint: typescript-eslint's type-aware recommended rules (e.g. promise misuse) and the React hooks rules for the widgets (`eslint.config.js`). TypeScript stays on `~6.0`, the newest typescript-eslint supports. |
+| `pnpm test` | Unit tests ([Vitest](https://vitest.dev/)) in `test/`, e.g. for the account statement calculation. |
 | `pnpm build` | Production build into `dist/`; run with `node ./dist/server/entry.mjs`. |
 
 ## Code
