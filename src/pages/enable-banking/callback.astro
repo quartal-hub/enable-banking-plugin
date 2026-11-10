@@ -9,6 +9,7 @@ import {
 } from "../../enable-banking/AuthorizationStore.ts";
 import { enableBankingRequest } from "../../enable-banking/EnableBankingClient.ts";
 import { type RawAccount, toAccount } from "../../enable-banking/toAccount.ts";
+import { SKIN_URL } from "../../../qrtl.config.ts";
 
 export const prerender = false;
 
@@ -59,12 +60,10 @@ Astro.response.headers.set("Cache-Control", "no-store");
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{title}</title>
-    <style>
-      body { font-family: system-ui, sans-serif; max-width: 40rem; margin: 3rem auto; padding: 0 1rem; }
-    </style>
+    <link rel="stylesheet" href={SKIN_URL} />
   </head>
-  <body>
-    <h1>{title}</h1>
+  <body class="container py-5" style="max-width: 40rem">
+    <h1 class="h3 mb-3">{title}</h1>
     <p>{message}</p>
   </body>
 </html>
