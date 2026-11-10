@@ -1,0 +1,9 @@
+---
+// A widget page's file name is the id of the tool it visualizes: this page is the UI
+// for the `sayHello` tool. Rename the file when you rename or replace the tool.
+import WidgetLayout from "../../layouts/WidgetLayout.astro";
+import SayHello from "../../components/SayHello.tsx";
+---
+<WidgetLayout title="Say hello">
+  <SayHello client:only="react" />
+</WidgetLayout>
