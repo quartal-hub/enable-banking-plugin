@@ -17,6 +17,8 @@ Apps widget) and as a REST API.
 | `startAuthorization` | `POST /api/enable-banking/start-authorization` | Starts connecting a bank: returns the bank login URL and an `authorizationId`. Has the **Connect bank** widget. |
 | `getAuthorizationResult` | `GET /api/enable-banking/authorization-result?authorizationId=…` | Whether the user has finished at the bank (`pending`, `connected`, `failed`, `notFound`); once connected, the session id and accounts. |
 | `listAccounts` | `GET /api/enable-banking/accounts?sessionId=…` | Accounts of a connected session: name, IBAN, type (`CACC`, `CARD`, …), currency. |
+| `getBalances` | `GET /api/enable-banking/balances?accountId=…` | Balances of an account (e.g. available `ITAV`, closing booked `CLBD`). |
+| `listTransactions` | `GET /api/enable-banking/transactions?accountId=…` | Transactions of an account, newest first: signed amounts (negative for money out), counterparty, description. Optional `dateFrom`/`dateTo`; pages with `continuationKey`. |
 | `getAccountStatement` | `GET /api/enable-banking/account-statement?accountId=…&dateFrom=…&dateTo=…` | **Account statement (tiliote)** for a period (default: the previous calendar month): opening and closing balance, every booked transaction with the running balance, money in and out, pending transactions separately. Has the **Account statement** widget. |
 
 All tools except `startAuthorization` are read-only and marked so for MCP hosts. How connecting a
@@ -70,7 +72,7 @@ The plugin runs on <http://localhost:4321>: docs and REST tester at `/`, the MCP
 - Claude Code: `claude mcp add --transport http enable-banking http://localhost:4321/mcp`.
 
 Then ask, for example: *"Connect my bank: Mock ASPSP in Finland"*, and after approving:
-*"Show my account statement for October."*
+*"What's my balance, and how much did I spend on groceries this month?"*
 
 Claude Desktop, claude.ai and ChatGPT cannot reach `localhost`: they need a deployment or an HTTPS
 tunnel, whose callback URL must also be registered with Enable Banking.

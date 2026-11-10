@@ -78,6 +78,14 @@ export interface Transaction {
   reference?: string;
 }
 
+/** One page of transactions */
+export interface TransactionPage {
+  /** The transactions, in the order the bank returns them (usually newest first) */
+  transactions: Transaction[];
+  /** Pass to `listTransactions` to get the next page; absent on the last page */
+  continuationKey?: string;
+}
+
 /** An account statement (tiliote) for a period */
 export interface AccountStatement {
   /** The account */

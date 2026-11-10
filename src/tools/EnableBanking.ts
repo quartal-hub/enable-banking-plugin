@@ -16,8 +16,11 @@ import type {
   AccountStatement,
   AuthorizationResult,
   AuthorizationStart,
+  Balance,
   Bank,
   StatementPrintLink,
+  Transaction,
+  TransactionPage,
 } from "./model/BankingModel.ts";
 
 /** Where Enable Banking sends the user's browser back to. Must match a registered redirect URL. */
@@ -123,9 +126,65 @@ export class EnableBanking {
   }
 
   /**
+   * Gets the balances of an account
+   * @param input The account
+   * @returns The balances the bank reports
+   * @readOnly
+   */
+  static async getBalances(input: {
+    /** Account `uid` from `listAccounts` */
+    accountId: string;
+  }): Promise<Balance[]> {
+    const res = await enableBankingRequest<{ balances: RawBalance[] }>(
+      "GET",
+      `/accounts/${encodeURIComponent(input.accountId)}/balances`,
+    );
+    return res.balances.map(toBalance);
+  }
+
+  /**
+   * Lists the transactions of an account, one page at a time. When the result has a
+   * `continuationKey`, call again with it to get the next page.
+   * @param input The account and optional date range
+   * @returns One page of transactions
+   * @readOnly
+   */
+  static async listTransactions(input: {
+    /** Account `uid` from `listAccounts` */
+    accountId: string;
+    /**
+     * First booking date to include. Not every bank supports date filtering.
+     * @format date
+     */
+    dateFrom?: string;
+    /**
+     * Last booking date to include
+     * @format date
+     */
+    dateTo?: string;
+    /** `continuationKey` from the previous page */
+    continuationKey?: string;
+  }): Promise<TransactionPage> {
+    const query = new URLSearchParams();
+    if (input.dateFrom) query.set("date_from", input.dateFrom);
+    if (input.dateTo) query.set("date_to", input.dateTo);
+    if (input.continuationKey) query.set("continuation_key", input.continuationKey);
+    const qs = query.size ? `?${query}` : "";
+    const res = await enableBankingRequest<{ transactions: RawTransaction[]; continuation_key?: string | null }>(
+      "GET",
+      `/accounts/${encodeURIComponent(input.accountId)}/transactions${qs}`,
+    );
+    return {
+      transactions: res.transactions.map(toTransaction),
+      continuationKey: res.continuation_key ?? undefined,
+    };
+  }
+
+  /**
    * Builds an account statement (tiliote) for a period: opening and closing balance, every booked
    * transaction with the running balance, and totals of money in and out. Shown as a printable
-   * statement by its widget. Use it when the user asks for a statement or an overview of a period.
+   * statement by its widget. Use it when the user asks for a statement or an overview of a period;
+   * use `listTransactions` for searching individual transactions.
    * @param input The account and period
    * @returns The statement
    * @readOnly
@@ -145,18 +204,17 @@ export class EnableBanking {
     dateTo?: string;
   }): Promise<AccountStatement> {
     const period = statementPeriod(input.dateFrom, input.dateTo);
-    const id = encodeURIComponent(input.accountId);
     const [details, balances, transactions] = await Promise.all([
-      enableBankingRequest<RawAccount>("GET", `/accounts/${id}/details`),
-      enableBankingRequest<{ balances: RawBalance[] }>("GET", `/accounts/${id}/balances`),
+      enableBankingRequest<RawAccount>("GET", `/accounts/${encodeURIComponent(input.accountId)}/details`),
+      EnableBanking.getBalances({ accountId: input.accountId }),
       // From the period start until today: later transactions are needed to work back from the
       // current balance to the balances of the period.
-      fetchAllTransactions(id, period.dateFrom),
+      fetchAllTransactions(input.accountId, period.dateFrom),
     ]);
     return buildAccountStatement({
       account: toAccount(details),
-      balances: balances.balances.map(toBalance),
-      transactions: transactions.transactions.map(toTransaction),
+      balances,
+      transactions: transactions.transactions,
       complete: transactions.complete,
       dateFrom: period.dateFrom,
       dateTo: period.dateTo,
@@ -199,25 +257,21 @@ const PRINT_PATH = "/enable-banking/statement";
 const MAX_STATEMENT_PAGES = 50;
 
 /**
- * All transactions booked from `dateFrom` on, following `continuation_key` pages
- * @param accountId URL-encoded account id
+ * All transactions booked from `dateFrom` on, following the `continuationKey` pages of
+ * `listTransactions`
+ * @param accountId Account `uid`
  * @param dateFrom First booking date
  */
 async function fetchAllTransactions(
   accountId: string,
   dateFrom: string,
-): Promise<{ transactions: RawTransaction[]; complete: boolean }> {
-  const transactions: RawTransaction[] = [];
+): Promise<{ transactions: Transaction[]; complete: boolean }> {
+  const transactions: Transaction[] = [];
   let continuationKey: string | undefined;
   for (let page = 0; page < MAX_STATEMENT_PAGES; page++) {
-    const query = new URLSearchParams({ date_from: dateFrom });
-    if (continuationKey) query.set("continuation_key", continuationKey);
-    const res = await enableBankingRequest<{ transactions: RawTransaction[]; continuation_key?: string | null }>(
-      "GET",
-      `/accounts/${accountId}/transactions?${query}`,
-    );
+    const res = await EnableBanking.listTransactions({ accountId, dateFrom, continuationKey });
     transactions.push(...res.transactions);
-    continuationKey = res.continuation_key ?? undefined;
+    continuationKey = res.continuationKey;
     if (!continuationKey) return { transactions, complete: true };
   }
   return { transactions, complete: false };
