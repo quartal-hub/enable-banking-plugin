@@ -17,9 +17,23 @@ Apps widget) and as a REST API.
 | `startAuthorization` | `POST /api/enable-banking/start-authorization` | Starts connecting a bank: returns the bank login URL and an `authorizationId`. Has the **Connect bank** widget. |
 | `getAuthorizationResult` | `GET /api/enable-banking/authorization-result?authorizationId=…` | Whether the user has finished at the bank (`pending`, `connected`, `failed`, `notFound`); once connected, the session id and accounts. |
 | `listAccounts` | `GET /api/enable-banking/accounts?sessionId=…` | Accounts of a connected session: name, IBAN, type (`CACC`, `CARD`, …), currency. |
+| `getAccountStatement` | `GET /api/enable-banking/account-statement?accountId=…&dateFrom=…&dateTo=…` | **Account statement (tiliote)** for a period (default: the previous calendar month): opening and closing balance, every booked transaction with the running balance, money in and out, pending transactions separately. Has the **Account statement** widget. |
 
 All tools except `startAuthorization` are read-only and marked so for MCP hosts. How connecting a
 bank works, step by step, and the error messages the agent gets: [docs/bank-connection.md](docs/bank-connection.md).
+
+### Account statement
+
+Banks report only the *current* balance, so the statement's balances are calculated backwards:
+the closing balance is the current booked balance (`CLBD`/`ITBD`, falling back to an available
+balance) minus the transactions booked after the period, and the opening balance is the closing
+balance minus the period's transactions. This is exact when the bank returns every booked
+transaction since the period start; the statement's `notes` say which balance it was calculated
+from and warn when not all transaction pages could be fetched. A period reaching past the balance
+date ends at that date. The calculation is in `src/enable-banking/buildAccountStatement.ts`.
+
+The widget shows the statement as a document (English labels); the layout is in
+`src/components/StatementView.tsx`.
 
 ## Setup
 
@@ -52,7 +66,7 @@ The plugin runs on <http://localhost:4321>: docs and REST tester at `/`, the MCP
 - Claude Code: `claude mcp add --transport http enable-banking http://localhost:4321/mcp`.
 
 Then ask, for example: *"Connect my bank: Mock ASPSP in Finland"*, and after approving:
-*"Show my bank accounts."*
+*"Show my account statement for October."*
 
 Claude Desktop, claude.ai and ChatGPT cannot reach `localhost`: they need a deployment or an HTTPS
 tunnel, whose callback URL must also be registered with Enable Banking.
@@ -96,6 +110,9 @@ styles (DataTables, Tabulator), which these widgets do not use.
 | `src/pages/enable-banking/callback.astro` | The redirect URL: exchanges the code for a session. |
 | `src/components/StartAuthorization.tsx`, `src/pages/widgets/startAuthorization.astro` | The Connect bank widget (React). |
 | `src/layouts/WidgetLayout.astro` | The widget layout, which links the skin (`SKIN_URL` in `qrtl.config.ts`). |
+| `src/enable-banking/buildAccountStatement.ts` | Account statement calculation (balances worked back from the current balance, in cents). |
+| `src/components/AccountStatement.tsx`, `src/pages/widgets/getAccountStatement.astro` | The Account statement widget (React). |
+| `src/components/StatementView.tsx` | The statement layout. |
 
 ## Limitations
 

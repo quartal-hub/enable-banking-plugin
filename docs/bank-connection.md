@@ -11,7 +11,7 @@ planned.
 |---|---|---|
 | API client | `src/enable-banking/EnableBankingClient.ts` | Calls `https://api.enablebanking.com` with an RS256 JWT signed by the application's private key with `jose` (`kid` = application id). The token is cached for an hour. |
 | Authorization store | `src/enable-banking/AuthorizationStore.ts` | Started authorizations keyed by the random `state` sent to the bank, and their outcome (session id and accounts, or an error). In memory, kept 30 minutes. |
-| Tools | `src/tools/EnableBanking.ts` | `listBanks`, `startAuthorization`, `getAuthorizationResult`, `listAccounts`. |
+| Tools | `src/tools/EnableBanking.ts` | `listBanks`, `startAuthorization`, `getAuthorizationResult`, `listAccounts`, `getAccountStatement`. |
 | Callback | `src/pages/enable-banking/callback.astro` | The redirect URL registered with Enable Banking. Exchanges the authorization code for a session and stores the outcome. A plain Astro page (which escapes everything it renders) outside the plugin's reserved paths (`/api`, `/mcp`, `/oauth`, …). |
 | Widget | `src/components/StartAuthorization.tsx` (page `src/pages/widgets/startAuthorization.astro`) | The **Connect bank** button for `startAuthorization`: opens the bank login through the MCP host. |
 
@@ -31,7 +31,7 @@ Agent            Plugin                           Enable Banking / bank        B
   │               completeAuthorization(state, sessionId, accounts)              │
   │  user: "done" → getAuthorizationResult(authorizationId)                      │
   │ ◀── { status: "connected", sessionId, accounts }                             │
-  │ listAccounts(sessionId)
+  │ listAccounts(sessionId), then getAccountStatement(accountId)
 ```
 
 1. **`startAuthorization`** creates a random `state`, calls `POST /auth` with the redirect URL and
@@ -47,7 +47,8 @@ Agent            Plugin                           Enable Banking / bank        B
 4. The user comes back to the chat and says they are done. The model calls
    **`getAuthorizationResult`** with the `authorizationId`; once the status is `connected`, the
    result has the session id and the accounts.
-5. The model reads the accounts with **`listAccounts(sessionId)`**.
+5. The model reads data with **`listAccounts(sessionId)`**, then **`getAccountStatement(accountId)`**
+   with the account ids it returned.
 
 `getAuthorizationResult` statuses: `pending` (user not back yet), `connected`, `failed`, and
 `notFound` (wrong id, or older than 30 minutes).
