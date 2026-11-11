@@ -1,4 +1,4 @@
-import { Helpers } from "@quartal/plugin";
+import { Helpers, type QuartalPluginContext } from "@quartal/plugin";
 import { enableBankingRequest } from "../enable-banking/EnableBankingClient.ts";
 import { sessionEndedError } from "../enable-banking/EnableBankingError.ts";
 import {
@@ -7,6 +7,7 @@ import {
   linkAuthorizationId,
 } from "../enable-banking/AuthorizationStore.ts";
 import { buildAccountStatement } from "../enable-banking/buildAccountStatement.ts";
+import { logToolCall } from "../enable-banking/logToolCall.ts";
 import { createPrintToken } from "../enable-banking/PrintLinks.ts";
 import { type RawAccount, toAccount } from "../enable-banking/toAccount.ts";
 import { type RawBalance, toBalance } from "../enable-banking/toBalance.ts";
@@ -37,6 +38,7 @@ export class EnableBanking {
   /**
    * Lists the banks available in a country
    * @param input The country
+   * @param ctx The logged-in user
    * @returns The banks
    * @readOnly
    */
@@ -46,7 +48,8 @@ export class EnableBanking {
      * @example "FI"
      */
     country: string;
-  }): Promise<Bank[]> {
+  }, ctx?: QuartalPluginContext): Promise<Bank[]> {
+    logToolCall("listBanks", ctx);
     const res = await enableBankingRequest<{
       aspsps: { name: string; country: string; logo?: string; psu_types?: string[] }[];
     }>("GET", `/aspsps?country=${encodeURIComponent(input.country.toUpperCase())}`);
@@ -58,6 +61,7 @@ export class EnableBanking {
    * approve access. When they are done, `getAuthorizationResult` with the returned
    * `authorizationId` gives the session id for `listAccounts`.
    * @param input The bank to connect
+   * @param ctx The logged-in user
    * @returns The bank login URL
    * @destructive false
    */
@@ -71,7 +75,8 @@ export class EnableBanking {
     country: string;
     /** Customer type. Default `personal`. */
     psuType?: "personal" | "business";
-  }): Promise<AuthorizationStart> {
+  }, ctx?: QuartalPluginContext): Promise<AuthorizationStart> {
+    logToolCall("startAuthorization", ctx);
     const state = createAuthorizationState(input.bank);
     const validUntil = new Date(Date.now() + ACCESS_DAYS * 24 * 3600 * 1000).toISOString();
     const res = await enableBankingRequest<{ url: string; authorization_id: string }>("POST", "/auth", {
@@ -90,26 +95,30 @@ export class EnableBanking {
    * they are done at the bank; once `status` is `connected`, the result has the session id and
    * accounts.
    * @param input The authorization
+   * @param ctx The logged-in user
    * @returns The authorization's status, and the session once connected
    * @readOnly
    */
   static getAuthorizationResult(input: {
     /** The `authorizationId` returned by `startAuthorization` */
     authorizationId: string;
-  }): AuthorizationResult {
+  }, ctx?: QuartalPluginContext): AuthorizationResult {
+    logToolCall("getAuthorizationResult", ctx);
     return findAuthorizationResult(input.authorizationId);
   }
 
   /**
    * Lists the accounts of a connected bank session
    * @param input The session
+   * @param ctx The logged-in user
    * @returns The accounts
    * @readOnly
    */
   static async listAccounts(input: {
     /** Session id shown after connecting a bank */
     sessionId: string;
-  }): Promise<Account[]> {
+  }, ctx?: QuartalPluginContext): Promise<Account[]> {
+    logToolCall("listAccounts", ctx);
     // The session lists account ids only; name, IBAN and currency come from each account's details.
     const session = await enableBankingRequest<{ status?: string; accounts?: string[] }>(
       "GET",
@@ -128,13 +137,15 @@ export class EnableBanking {
   /**
    * Gets the balances of an account
    * @param input The account
+   * @param ctx The logged-in user
    * @returns The balances the bank reports
    * @readOnly
    */
   static async getBalances(input: {
     /** Account `uid` from `listAccounts` */
     accountId: string;
-  }): Promise<Balance[]> {
+  }, ctx?: QuartalPluginContext): Promise<Balance[]> {
+    logToolCall("getBalances", ctx);
     const res = await enableBankingRequest<{ balances: RawBalance[] }>(
       "GET",
       `/accounts/${encodeURIComponent(input.accountId)}/balances`,
@@ -146,6 +157,7 @@ export class EnableBanking {
    * Lists the transactions of an account, one page at a time. When the result has a
    * `continuationKey`, call again with it to get the next page.
    * @param input The account and optional date range
+   * @param ctx The logged-in user
    * @returns One page of transactions
    * @readOnly
    */
@@ -164,7 +176,8 @@ export class EnableBanking {
     dateTo?: string;
     /** `continuationKey` from the previous page */
     continuationKey?: string;
-  }): Promise<TransactionPage> {
+  }, ctx?: QuartalPluginContext): Promise<TransactionPage> {
+    logToolCall("listTransactions", ctx);
     const query = new URLSearchParams();
     if (input.dateFrom) query.set("date_from", input.dateFrom);
     if (input.dateTo) query.set("date_to", input.dateTo);
@@ -186,6 +199,7 @@ export class EnableBanking {
    * statement by its widget. Use it when the user asks for a statement or an overview of a period;
    * use `listTransactions` for searching individual transactions.
    * @param input The account and period
+   * @param ctx The logged-in user
    * @returns The statement
    * @readOnly
    */
@@ -202,14 +216,15 @@ export class EnableBanking {
      * @format date
      */
     dateTo?: string;
-  }): Promise<AccountStatement> {
+  }, ctx?: QuartalPluginContext): Promise<AccountStatement> {
+    logToolCall("getAccountStatement", ctx);
     const period = statementPeriod(input.dateFrom, input.dateTo);
     const [details, balances, transactions] = await Promise.all([
       enableBankingRequest<RawAccount>("GET", `/accounts/${encodeURIComponent(input.accountId)}/details`),
-      EnableBanking.getBalances({ accountId: input.accountId }),
+      EnableBanking.getBalances({ accountId: input.accountId }, ctx),
       // From the period start until today: later transactions are needed to work back from the
       // current balance to the balances of the period.
-      fetchAllTransactions(input.accountId, period.dateFrom),
+      fetchAllTransactions(input.accountId, period.dateFrom, ctx),
     ]);
     return buildAccountStatement({
       account: toAccount(details),
@@ -226,6 +241,7 @@ export class EnableBanking {
    * Creates a short-lived link to a printable page of an account statement, for the Account
    * statement widget's print button (widgets cannot open the print dialog themselves)
    * @param input The account and period, as in `getAccountStatement`
+   * @param ctx The logged-in user
    * @returns The link, valid for 10 minutes
    * @visibility app
    * @destructive false
@@ -243,7 +259,8 @@ export class EnableBanking {
      * @format date
      */
     dateTo: string;
-  }): StatementPrintLink {
+  }, ctx?: QuartalPluginContext): StatementPrintLink {
+    logToolCall("createStatementPrintLink", ctx);
     const url = new URL(PRINT_PATH, redirectUrl());
     url.searchParams.set("token", createPrintToken(input));
     return { url: url.href };
@@ -261,15 +278,17 @@ const MAX_STATEMENT_PAGES = 50;
  * `listTransactions`
  * @param accountId Account `uid`
  * @param dateFrom First booking date
+ * @param ctx The logged-in user
  */
 async function fetchAllTransactions(
   accountId: string,
   dateFrom: string,
+  ctx: QuartalPluginContext | undefined,
 ): Promise<{ transactions: Transaction[]; complete: boolean }> {
   const transactions: Transaction[] = [];
   let continuationKey: string | undefined;
   for (let page = 0; page < MAX_STATEMENT_PAGES; page++) {
-    const res = await EnableBanking.listTransactions({ accountId, dateFrom, continuationKey });
+    const res = await EnableBanking.listTransactions({ accountId, dateFrom, continuationKey }, ctx);
     transactions.push(...res.transactions);
     continuationKey = res.continuationKey;
     if (!continuationKey) return { transactions, complete: true };
