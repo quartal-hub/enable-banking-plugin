@@ -37,7 +37,10 @@ Agent Plugins manifest at `/plugin.json`.
 - **Skills**: to ship know-how alongside the tools, add folders with a `SKILL.md` under
   `skills/`.
 - **Plugin options** (title, description, auth, deploy) live in `qrtl.config.ts`.
-- **Auth**: this plugin is anonymous (`auth: "anon"` in `qrtl.config.ts`).
+- **Auth**: `/api/*` and `/mcp` require an OAuth token from the Quartal test Keycloak
+  (`auth.mode: "custom"` in `qrtl.config.ts`); MCP clients log in with a pre-registered Keycloak
+  client. Setup and troubleshooting: `docs/authentication.md`. Tools do not yet use the logged-in
+  user (plan: `docs/user-authentication.md`).
 
 ## Verify changes
 
