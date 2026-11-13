@@ -38,11 +38,12 @@ Agent Plugins manifest at `/plugin.json`.
   `skills/`.
 - **Plugin options** (title, description, auth, deploy) live in `qrtl.config.ts`.
 - **Auth**: `/api/*` and `/mcp` require an OAuth token from the Quartal test Keycloak
-  (`auth.mode: "custom"` in `qrtl.config.ts`); MCP clients log in with a pre-registered Keycloak
-  client. Setup and troubleshooting: `docs/authentication.md`. Every tool requires the logged-in user
+  (`auth: "quartal-hub"` in `qrtl.config.ts`, which the Quartal Hub secrets need); MCP clients
+  log in with a pre-registered Keycloak client. Setup and troubleshooting: `docs/authentication.md`. Every tool requires the logged-in user
   (`requireUser(ctx)`) and works only on that user's bank connections; a tool that takes an
-  `accountId` must resolve it with `requireAccountConnection` before calling Enable Banking. How
-  connections are stored: `docs/bank-connection.md`.
+  `accountId` must resolve it with `requireAccountConnection` before calling Enable Banking, and
+  a tool that reads connections must go through `signedIn(ctx)` so it first saves connections the
+  bank callback parked. How connections are stored: `docs/bank-connection.md`.
 
 ## Verify changes
 

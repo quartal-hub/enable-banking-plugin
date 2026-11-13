@@ -5,34 +5,44 @@ and how the plugin's tools then read accounts, balances and transactions. Loggin
 itself is in [authentication.md](./authentication.md).
 
 Every tool call has a logged-in user (`ctx.uid`, the access token's `sub`). Bank connections are
-stored on the server under that user, so they survive restarts and new conversations, and the
-Enable Banking session id never leaves the server: the model works with account ids and
-connection ids only.
+stored in that user's Quartal Hub secrets, so they survive restarts, deploys and new
+conversations, and the Enable Banking session id never reaches the model: the model works with
+account ids and connection ids only.
 
 ## Parts
 
 | Part | File | Role |
 |---|---|---|
 | API client | `src/enable-banking/EnableBankingClient.ts` | Calls `https://api.enablebanking.com` with an RS256 JWT signed by the application's private key with `jose` (`kid` = application id). The token is cached for an hour. |
-| Store | `src/enable-banking/PluginStore.ts` | Persistent key-value store over [unstorage](https://unstorage.unjs.io), with expiry. Files under `.data/` by default (`ENABLE_BANKING_DATA_DIR`). |
-| Authorization store | `src/enable-banking/AuthorizationStore.ts` | Started authorizations keyed by the random `state` sent to the bank: the user who started it, the bank, and the outcome (accounts or an error). Kept 30 minutes. |
+| Connection store | `src/enable-banking/ConnectionStore.ts` | Where a user's connections live: their Quartal Hub secret `enable-banking.connections`, through the experimental Hub context of `@quartal/plugin` (`getExperimentalHubContext(ctx).secrets`), which needs `auth: "quartal-hub"`. Needs the user's token, so only tool calls can use it. |
 | Connections | `src/enable-banking/Connections.ts` | Each user's bank connections (session id, bank, accounts, validity), the account ownership check, and marking connections whose session has ended. |
+| Short-lived store | `src/enable-banking/PluginStore.ts` | Key-value store with expiry over [unstorage](https://unstorage.unjs.io): Redis at `REDIS_URL` (shared by every server instance), or memory when it is not set (local development). |
+| Authorization store | `src/enable-banking/AuthorizationStore.ts` | Started authorizations keyed by the random `state` sent to the bank: the user who started it, the bank, and the outcome (accounts or an error), plus the new connection until the user's next tool call saves it. Kept 30 minutes. |
+| Sealed tokens | `src/enable-banking/SealedToken.ts` | Encrypted, self-contained tokens (AES-256-GCM, key derived from `ENABLE_BANKING_PRIVATE_KEY`), used for print links. |
 | Account data | `src/enable-banking/AccountData.ts` | Balances, transactions and statements from Enable Banking, for an account already checked to be the user's. |
 | Tools | `src/tools/EnableBanking.ts` | `listBanks`, `startAuthorization`, `getAuthorizationResult`, `listConnections`, `listAccounts`, `getBalances`, `listTransactions`, `getAccountStatement`, `disconnectBank` (and the widget-only `createStatementPrintLink`). |
-| Callback | `src/pages/enable-banking/callback.astro` | The redirect URL registered with Enable Banking. Exchanges the authorization code for a session and saves it as the user's connection. A plain Astro page (which escapes everything it renders) outside the plugin's reserved paths (`/api`, `/mcp`, `/oauth`, …). |
+| Callback | `src/pages/enable-banking/callback.astro` | The redirect URL registered with Enable Banking. Exchanges the authorization code for a session and parks it as the user's new connection. A plain Astro page (which escapes everything it renders) outside the plugin's reserved paths (`/api`, `/mcp`, `/oauth`, …). |
 | Widget | `src/components/StartAuthorization.tsx` (page `src/pages/widgets/startAuthorization.astro`) | The **Connect bank** button for `startAuthorization`: opens the bank login through the MCP host, then checks `getAuthorizationResult` every 5 seconds for 5 minutes and tells the chat when the bank is connected. |
 
 ## Stored records
 
-| Record | Key | Contents | Lifetime |
+| Record | Where | Contents | Lifetime |
 |---|---|---|---|
-| Started authorization | `authorizations:<state>` | user id, bank, country, customer type, requested validity, `authorizationId`, status, accounts or error | 30 minutes |
-| Authorization id index | `authorization-ids:<sha256(authorizationId)>` | the `state` | 30 minutes |
-| Bank connection | `connections:<sha256(uid)>:<connectionId>` | user id, session id, bank, country, customer type, accounts, status (`active`/`ended`), `validUntil`, `connectedAt` | until `validUntil`, or `disconnectBank` |
-| Print token | `print-tokens:<token>` | user id, account id, period | 10 minutes |
+| Bank connections | the user's Quartal Hub secret `enable-banking.connections` (a JSON array; the metadata has only the count) | per connection: user id, session id, bank, country, customer type, accounts, status (`active`/`ended`), `validUntil`, `connectedAt` | until `validUntil` (dropped on read), or `disconnectBank` |
+| Started authorization | short-lived store, `authorizations:<state>` | user id, bank, country, customer type, requested validity, `authorizationId`, status, accounts or error; the new connection until it is saved | 30 minutes |
+| Authorization id index | short-lived store, `authorization-ids:<sha256(authorizationId)>` | the `state` | 30 minutes |
+| Unsaved connection index | short-lived store, `unclaimed:<sha256(uid)>:<state>` | the `state` | until saved, at most 30 minutes |
+| Print token | nowhere: the link's token, encrypted | user id, account id, period, bank | 10 minutes |
 
-Session ids are bank-data credentials for whoever holds the application key. They are stored
-unencrypted, so the store must not be shared with anything else.
+Session ids are bank-data credentials for whoever holds the application key. Quartal Hub keeps
+each user's secrets apart; in the test environment, other `quartal-hub` plugins the same user
+signs in to can read them too (shared audience).
+
+The short-lived store must be shared by every server instance: on serverless hosts such as Vercel
+the callback often reaches another instance than the one that started the authorization (tried:
+19 seconds after `startAuthorization`, with a single user), so there it is Redis.
+With the memory store of local development, a restart during a bank login makes that connect
+fail. Every tool call and callback logs the instance id (`instance=…`).
 
 ## Flow
 
@@ -48,8 +58,9 @@ Agent            Plugin                           Enable Banking / bank        B
   │               GET /enable-banking/callback?code&state ◀──────── redirect ─── │
   │               getPendingAuthorization(state) → uid                           │
   │               POST /sessions {code} ───────────▶                             │
-  │               saveConnection(uid, sessionId, accounts)                       │
+  │               completeAuthorization(state, connection)  (parked in Redis)    │
   │  widget polls getAuthorizationResult(authorizationId) every 5 s              │
+  │               claimCompletedConnections → user's Hub secret                  │
   │  widget: sendMessage("I have connected <bank>.") → the model continues       │
   │ ◀── { status: "connected", accounts }                                        │
   │ listAccounts(), then getAccountStatement / getBalances / listTransactions(accountId)
@@ -65,11 +76,15 @@ Agent            Plugin                           Enable Banking / bank        B
 4. The bank redirects the browser to **`/enable-banking/callback?code=…&state=…`** (or `error=…`).
    The redirect carries no bearer token: the user is the one stored with the `state`, which the
    plugin itself created, is random, works once and expires in 30 minutes. Nothing else in the
-   URL is trusted for identity. The callback exchanges the code with `POST /sessions` and saves
-   the session and accounts as that user's connection, replacing an earlier connection of the
-   user to the same bank, country and customer type (whose session is closed at Enable Banking).
-   The page tells the user to return to the chat.
-5. After a click on **Connect bank**, the widget calls **`getAuthorizationResult`** every 5
+   URL is trusted for identity. The callback exchanges the code with `POST /sessions`. Without
+   the user's token it cannot write their Hub secret, so it parks the session and accounts with
+   the authorization. The page tells the user to return to the chat.
+5. The user's **next tool call** (normally the widget's `getAuthorizationResult`) saves the parked
+   connection to the user's secret (`claimCompletedConnections`, run by every tool that reads
+   connections), replacing an earlier connection of the user to the same bank, country and
+   customer type (whose session is closed at Enable Banking). Saving the same session twice
+   changes nothing, so concurrent tool calls cannot close the session they just saved.
+6. After a click on **Connect bank**, the widget calls **`getAuthorizationResult`** every 5
    seconds for 5 minutes. Then it stops and offers a **Check again** button (another 5 minutes of
    checks) and tells the user they can also tell the assistant; the authorization itself is kept
    for 30 minutes, so finishing later still works. When the status is
@@ -79,7 +94,7 @@ Agent            Plugin                           Enable Banking / bank        B
    assistant to continue" in the widget instead, and without the widget the user says they are
    done. `getAuthorizationResult` answers only the user who started the authorization (anyone
    else gets `notFound`), and once connected it lists the accounts.
-6. The model reads data with **`getAccountStatement(accountId)`**, **`getBalances(accountId)`** and
+7. The model reads data with **`getAccountStatement(accountId)`**, **`getBalances(accountId)`** and
    **`listTransactions(accountId)`**. Each of them first resolves the account id to one of the
    user's connections; an account id that is not the user's gets the same "Unknown account id" as
    one that does not exist, and Enable Banking is not called.
@@ -93,8 +108,9 @@ and deletes the connection.
 
 The printable statement page (`/enable-banking/statement?token=…`) is opened in a plain browser
 tab without a bearer token. `createStatementPrintLink` checks the account like the other tools
-and stores the user with the token; the page checks again that the account is that user's before
-building the statement.
+and puts the user, account, period and bank into the token, encrypted (`SealedToken.ts`); nothing
+is stored. The page builds the statement from the token alone; after a disconnect, Enable Banking
+refuses the account and the page shows the error.
 
 ## Errors
 

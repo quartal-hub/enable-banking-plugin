@@ -3,6 +3,11 @@
 > **Implemented.** The current flow is described in [bank-connection.md](./bank-connection.md).
 > This plan is kept for its reasoning. Where the implementation differs:
 >
+> - **Since 2026-11-13 (for serverless hosting such as Vercel):** connections are
+>   in each user's Quartal Hub secrets (a `ConnectionStore` after all), bank logins in progress in
+>   Redis (memory locally), and print links are encrypted tokens; auth is `quartal-hub`. The `Store`,
+>   `No encryption at rest` and `Auth mode` points below describe the earlier state.
+>
 > - **Store:** instead of a `ConnectionStore` with one method per record, a small key-value
 >   `PluginStore` with expiry (`src/enable-banking/PluginStore.ts`) over
 >   [unstorage](https://unstorage.unjs.io), with the record logic in `AuthorizationStore.ts`,

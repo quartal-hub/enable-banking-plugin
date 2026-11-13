@@ -68,10 +68,9 @@ Requirements: Node.js 22.23.4 or later (Astro 7), pnpm 11.
    - `ENABLE_BANKING_PRIVATE_KEY`: the contents of the `.pem` file, in double quotes over several
      lines, or on one line with `\n` for the line breaks (`.env` is gitignored),
    - `ENABLE_BANKING_REDIRECT_URL`: only when not running on `http://localhost:4321`; it must
-     exactly match a redirect URL registered for the application,
-   - `ENABLE_BANKING_DATA_DIR`: where the bank connections are stored, default `.data`
-     (gitignored). The directory holds Enable Banking session ids, which give access to the
-     users' bank data: keep it private.
+     exactly match a redirect URL registered for the application.
+
+   Bank connections need no local setup: they are kept in each user's Quartal Hub secrets.
 3. **Run:**
 
    ```bash
@@ -126,7 +125,7 @@ styles (DataTables, Tabulator), which these widgets do not use.
 | `pnpm typecheck` | `astro check` (TypeScript 6; see the `@emnapi/runtime` override in `pnpm-workspace.yaml`). |
 | `pnpm lint` | ESLint: typescript-eslint's type-aware recommended rules (e.g. promise misuse) and the React hooks rules for the widgets (`eslint.config.js`). TypeScript stays on `~6.0`, the newest typescript-eslint supports. |
 | `pnpm test` | Unit tests ([Vitest](https://vitest.dev/)) in `test/`, e.g. for the account statement calculation. |
-| `pnpm build` | Production build into `dist/`; run with `node ./dist/server/entry.mjs`. |
+| `pnpm build` | Production build into `dist/`; run with `node ./dist/server/entry.mjs`. `VERCEL=1 pnpm build` builds for Vercel into `.vercel/output/`. |
 
 ## Code
 
@@ -135,11 +134,13 @@ styles (DataTables, Tabulator), which these widgets do not use.
 | `src/tools/EnableBanking.ts` | The tools (exported from `src/tools/mod.ts`). |
 | `src/tools/model/BankingModel.ts` | Tool input and output types. |
 | `src/enable-banking/EnableBankingClient.ts` | Enable Banking API client; signs RS256 JWTs with [`jose`](https://github.com/panva/jose), which also runs on Cloudflare Workers. |
-| `src/enable-banking/PluginStore.ts` | The persistent store ([unstorage](https://unstorage.unjs.io); files under `.data/` by default). |
-| `src/enable-banking/AuthorizationStore.ts` | Started authorizations, the user who started each, and their outcome. |
+| `src/enable-banking/ConnectionStore.ts` | Where each user's connections are kept: their Quartal Hub secret `enable-banking.connections`. |
 | `src/enable-banking/Connections.ts` | Each user's bank connections and the account ownership check. |
+| `src/enable-banking/PluginStore.ts` | The short-lived store ([unstorage](https://unstorage.unjs.io): Redis at `REDIS_URL`, memory locally) for bank logins in progress. |
+| `src/enable-banking/AuthorizationStore.ts` | Started authorizations, the user who started each, their outcome, and the new connection until the user's next tool call saves it. |
+| `src/enable-banking/SealedToken.ts` | Encrypted, self-contained tokens, for print links. |
 | `src/enable-banking/AccountData.ts` | Balances, transactions and statements from Enable Banking. |
-| `src/pages/enable-banking/callback.astro` | The redirect URL: exchanges the code for a session and saves it as the user's connection. |
+| `src/pages/enable-banking/callback.astro` | The redirect URL: exchanges the code for a session and parks it as the user's new connection. |
 | `src/components/StartAuthorization.tsx`, `src/pages/widgets/startAuthorization.astro` | The Connect bank widget (React). |
 | `src/layouts/WidgetLayout.astro` | The widget layout, which links the skin (`SKIN_URL` in `qrtl.config.ts`). |
 | `src/enable-banking/buildAccountStatement.ts` | Account statement calculation (balances worked back from the current balance, in cents). |
@@ -149,12 +150,14 @@ styles (DataTables, Tabulator), which these widgets do not use.
 
 ## Limitations
 
-- **One process, local files:** the store is files on the server's disk (unstorage's `fs`
-  driver), which survive restarts but are not shared between instances. Several instances or
-  serverless hosting need a shared store: set another unstorage driver (e.g. Redis or Cloudflare
-  KV) in `getPluginStore()` in `src/enable-banking/PluginStore.ts`.
-- **Session ids are stored unencrypted.** Keep the data directory (or the shared store) private
-  to the plugin.
+- **Experimental Quartal Hub API:** connections are kept through `@quartal/plugin`'s experimental
+  Hub context, which works only in the Quartal test environment and may change. If it does,
+  connections can move to another store with `setConnectionStoreFactory()`
+  (`src/enable-banking/ConnectionStore.ts`).
+- **Local bank logins in progress are in memory** unless `REDIS_URL` is set: restarting
+  `pnpm dev` during a bank login makes that connect fail. Saved connections are not affected.
+- **Session ids in Hub secrets** are readable by other `quartal-hub` plugins the same user signs
+  in to (the test environment shares one audience).
 - **Not tried with real logins yet:** the per-user checks are covered by unit tests
   (`test/userConnections.test.ts`); connecting a bank and reading it with two Keycloak users has
   not been done end to end.

@@ -2,21 +2,22 @@
 
 The REST API (`/api/*`) and the MCP server (`/mcp`) require an OAuth access token from the Quartal
 test Keycloak. MCP clients run the login flow themselves. This document tells how to set up a
-client that can log in. Tying bank connections to the logged-in user is a separate, unfinished
-step: [user-authentication.md](./user-authentication.md).
+client that can log in. How bank connections are tied to the logged-in user:
+[bank-connection.md](./bank-connection.md).
 
 ## How it works
 
-`qrtl.config.ts` sets the plugin's auth to `custom`:
+`qrtl.config.ts` sets the plugin's auth to `quartal-hub`:
 
 ```ts
-auth: {
-  mode: "custom",
-  issuer: "https://iam2026.test.qrtl.com/auth/realms/quartal",
-  scope: "quartal-hub-test",
-  audience: "https://hub.test.qrtl.com",
-},
+auth: "quartal-hub",
 ```
+
+That mode's built-in values (in `@quartal/plugin`) are the Quartal test Keycloak: issuer
+`https://iam2026.test.qrtl.com/auth/realms/quartal`, scope `quartal-hub-test` and audience
+`https://hub.test.qrtl.com`. It is also what the experimental Quartal Hub context needs: the
+plugin keeps each user's bank connections in their Quartal Hub secrets, called with the user's
+token. (Until 2026-11-13 the plugin used `mode: "custom"` with the same three values.)
 
 - A request without a token gets `401` with a `WWW-Authenticate` header that points to the
   protected resource metadata at `/.well-known/oauth-protected-resource`.
