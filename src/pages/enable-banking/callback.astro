@@ -2,14 +2,14 @@
 // Enable Banking redirects the user's browser here after bank authorization, with `code` and
 // `state` (or `error`) in the query string. The redirect carries no bearer token: the user is the
 // one who started the authorization, found through the random, single-use `state` the plugin
-// created. Exchanges the code for a session, saves it as that user's connection and stores the
-// outcome for `getAuthorizationResult`. Astro escapes every value rendered below.
+// created. Exchanges the code for a session and parks it as that user's new connection with the
+// outcome for `getAuthorizationResult`; the user's next tool call saves it to their connection store,
+// which needs the user's token. Astro escapes every value rendered below.
 import {
   completeAuthorization,
   failAuthorization,
   getPendingAuthorization,
 } from "../../enable-banking/AuthorizationStore.ts";
-import { saveConnection } from "../../enable-banking/Connections.ts";
 import { enableBankingRequest } from "../../enable-banking/EnableBankingClient.ts";
 import { type RawAccount, toAccount } from "../../enable-banking/toAccount.ts";
 import { SKIN_URL } from "../../../qrtl.config.ts";
@@ -20,7 +20,7 @@ const params = Astro.url.searchParams;
 const state = params.get("state") ?? "";
 const pending = await getPendingAuthorization(state);
 let title = "Unknown or expired request";
-let message = "Start connecting the bank again from the chat.";
+let message = "The request has expired, or the plugin was restarted. Start connecting the bank again from the chat.";
 let status = 400;
 
 if (pending) {
@@ -39,7 +39,7 @@ if (pending) {
         access?: { valid_until?: string };
       }>("POST", "/sessions", { code });
       const accounts = session.accounts.map(toAccount);
-      await saveConnection({
+      await completeAuthorization(state, {
         uid: pending.uid,
         sessionId: session.session_id,
         bank: pending.bank,
@@ -48,7 +48,6 @@ if (pending) {
         accounts,
         validUntil: session.access?.valid_until ?? pending.validUntil,
       });
-      await completeAuthorization(state, accounts);
       title = `${pending.bank} connected`;
       const shared = accounts.length
         ? `${accounts.length} account${accounts.length === 1 ? "" : "s"} shared.`

@@ -1,6 +1,7 @@
 import { Helpers, type QuartalPluginContext } from "@quartal/plugin";
 import { fetchAccountStatement, fetchBalances, fetchTransactionPage } from "../enable-banking/AccountData.ts";
 import {
+  claimCompletedConnections,
   createAuthorizationState,
   findAuthorizationResult,
   linkAuthorizationId,
@@ -10,8 +11,9 @@ import {
   listStoredConnections,
   removeConnection,
   requireAccountConnection,
-  requireUid,
+  requireUser,
   toConnection,
+  type UserContext,
   withConnection,
 } from "../enable-banking/Connections.ts";
 import { enableBankingRequest } from "../enable-banking/EnableBankingClient.ts";
@@ -86,7 +88,7 @@ export class EnableBanking {
     psuType?: "personal" | "business";
   }, ctx?: QuartalPluginContext): Promise<AuthorizationStart> {
     logToolCall("startAuthorization", ctx);
-    const uid = requireUid(ctx);
+    const { uid } = requireUser(ctx);
     const country = input.country.toUpperCase();
     const psuType = input.psuType ?? "personal";
     const validUntil = new Date(Date.now() + ACCESS_DAYS * 24 * 3600 * 1000).toISOString();
@@ -115,7 +117,8 @@ export class EnableBanking {
     authorizationId: string;
   }, ctx?: QuartalPluginContext): Promise<AuthorizationResult> {
     logToolCall("getAuthorizationResult", ctx);
-    return findAuthorizationResult(requireUid(ctx), input.authorizationId);
+    const user = await signedIn(ctx);
+    return findAuthorizationResult(user.uid, input.authorizationId);
   }
 
   /**
@@ -127,7 +130,7 @@ export class EnableBanking {
    */
   static async listConnections(_input?: Record<string, never>, ctx?: QuartalPluginContext): Promise<Connection[]> {
     logToolCall("listConnections", ctx);
-    return (await listStoredConnections(requireUid(ctx))).map(toConnection);
+    return (await listStoredConnections(await signedIn(ctx))).map(toConnection);
   }
 
   /**
@@ -142,7 +145,7 @@ export class EnableBanking {
     connectionId?: string;
   }, ctx?: QuartalPluginContext): Promise<Account[]> {
     logToolCall("listAccounts", ctx);
-    const connections = await listStoredConnections(requireUid(ctx));
+    const connections = await listStoredConnections(await signedIn(ctx));
     return connections
       .filter((c) => c.status === "active" && (!input.connectionId || c.connectionId === input.connectionId))
       .flatMap((c) => c.accounts.map((a) => ({ ...a, bank: c.bank })));
@@ -160,8 +163,9 @@ export class EnableBanking {
     accountId: string;
   }, ctx?: QuartalPluginContext): Promise<Balance[]> {
     logToolCall("getBalances", ctx);
-    const connection = await requireAccountConnection(requireUid(ctx), input.accountId);
-    return withConnection(connection, () => fetchBalances(input.accountId));
+    const user = await signedIn(ctx);
+    const connection = await requireAccountConnection(user, input.accountId);
+    return withConnection(user, connection, () => fetchBalances(input.accountId));
   }
 
   /**
@@ -189,8 +193,9 @@ export class EnableBanking {
     continuationKey?: string;
   }, ctx?: QuartalPluginContext): Promise<TransactionPage> {
     logToolCall("listTransactions", ctx);
-    const connection = await requireAccountConnection(requireUid(ctx), input.accountId);
-    return withConnection(connection, () => fetchTransactionPage(input.accountId, input));
+    const user = await signedIn(ctx);
+    const connection = await requireAccountConnection(user, input.accountId);
+    return withConnection(user, connection, () => fetchTransactionPage(input.accountId, input));
   }
 
   /**
@@ -218,8 +223,11 @@ export class EnableBanking {
     dateTo?: string;
   }, ctx?: QuartalPluginContext): Promise<AccountStatement> {
     logToolCall("getAccountStatement", ctx);
-    const connection = await requireAccountConnection(requireUid(ctx), input.accountId);
-    return withConnection(connection, () => fetchAccountStatement(input.accountId, input.dateFrom, input.dateTo));
+    const user = await signedIn(ctx);
+    const connection = await requireAccountConnection(user, input.accountId);
+    return withConnection(user, connection, () =>
+      fetchAccountStatement(input.accountId, input.dateFrom, input.dateTo),
+    );
   }
 
   /**
@@ -246,8 +254,9 @@ export class EnableBanking {
     dateTo: string;
   }, ctx?: QuartalPluginContext): Promise<StatementPrintLink> {
     logToolCall("createStatementPrintLink", ctx);
-    const uid = requireUid(ctx);
-    const { bank } = await requireAccountConnection(uid, input.accountId);
+    const user = await signedIn(ctx);
+    const { uid } = user;
+    const { bank } = await requireAccountConnection(user, input.accountId);
     const { accountId, dateFrom, dateTo } = input;
     const url = new URL(PRINT_PATH, redirectUrl());
     url.searchParams.set("token", await createPrintToken({ uid, accountId, dateFrom, dateTo, bank }));
@@ -267,11 +276,23 @@ export class EnableBanking {
     connectionId: string;
   }, ctx?: QuartalPluginContext): Promise<Connection> {
     logToolCall("disconnectBank", ctx);
-    const connection = await findConnection(requireUid(ctx), input.connectionId);
+    const user = await signedIn(ctx);
+    const connection = await findConnection(user, input.connectionId);
     if (!connection) throw new Error("Unknown connection id. Use a connectionId from listConnections.");
-    await removeConnection(connection);
+    await removeConnection(user, connection);
     return toConnection(connection);
   }
+}
+
+/**
+ * The logged-in user, after saving the connections they completed at the bank since their last
+ * tool call
+ * @param ctx The tool call's context
+ */
+async function signedIn(ctx: QuartalPluginContext | undefined): Promise<UserContext> {
+  const user = requireUser(ctx);
+  await claimCompletedConnections(user);
+  return user;
 }
 
 /** The callback URL: `ENABLE_BANKING_REDIRECT_URL`, or the local dev server by default */

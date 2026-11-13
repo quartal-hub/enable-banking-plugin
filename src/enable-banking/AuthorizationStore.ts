@@ -1,10 +1,13 @@
 import type { Account, AuthorizationResult } from "../tools/model/BankingModel.ts";
+import { type NewConnection, saveConnection, type UserContext } from "./Connections.ts";
 import { getPluginStore, hashKey } from "./PluginStore.ts";
 
 /**
  * A started bank authorization and, once the user is back at the callback, its outcome. The
  * callback is a browser redirect without a bearer token: the user is the `uid` stored here, found
- * through the random, single-use `state` the plugin created.
+ * through the random, single-use `state` the plugin created. Without a token, the callback cannot
+ * write the user's connection store either: it parks the new connection here, and the user's next
+ * tool call saves it (`claimCompletedConnections`).
  */
 export interface AuthorizationRecord {
   /** The user who started it (`ctx.uid`) */
@@ -21,6 +24,8 @@ export interface AuthorizationRecord {
   authorizationId?: string;
   status: "pending" | "connected" | "failed";
   accounts?: Account[];
+  /** The new connection, from the callback until the user's next tool call saves it */
+  connection?: NewConnection;
   error?: string;
 }
 
@@ -77,12 +82,42 @@ export async function getPendingAuthorization(state: string): Promise<Authorizat
 }
 
 /**
- * Marks an authorization as connected
- * @param state The authorization's `state`
- * @param accounts The accounts the user shared
+ * Store key prefix of a user's connected authorizations whose connection is not saved yet
+ * @param uid The user's id
  */
-export async function completeAuthorization(state: string, accounts: Account[]): Promise<void> {
-  await update(state, { status: "connected", accounts });
+async function unclaimedPrefix(uid: string): Promise<string> {
+  return `unclaimed:${await hashKey(uid)}`;
+}
+
+/**
+ * Marks an authorization as connected and parks its new connection until the user's next tool
+ * call saves it
+ * @param state The authorization's `state`
+ * @param connection The new connection
+ */
+export async function completeAuthorization(state: string, connection: NewConnection): Promise<void> {
+  await update(state, { status: "connected", accounts: connection.accounts, connection });
+  await getPluginStore().set(`${await unclaimedPrefix(connection.uid)}:${state}`, state, TTL_SECONDS);
+}
+
+/**
+ * Saves the user's parked connections (see `completeAuthorization`) to their connection store and
+ * drops the session ids from the authorization records
+ * @param ctx The logged-in user
+ */
+export async function claimCompletedConnections(ctx: UserContext): Promise<void> {
+  const store = getPluginStore();
+  const prefix = await unclaimedPrefix(ctx.uid);
+  for (const key of await store.keys(prefix)) {
+    const state = key.slice(prefix.length + 1);
+    const record = stateKey(state) ? await store.get<AuthorizationRecord>(`authorizations:${state}`) : undefined;
+    if (record?.connection && record.uid === ctx.uid) {
+      // Saving the same session twice changes nothing, so a concurrent claim is harmless.
+      await saveConnection(ctx, record.connection);
+      await update(state, { connection: undefined });
+    }
+    await store.remove(key);
+  }
 }
 
 /**

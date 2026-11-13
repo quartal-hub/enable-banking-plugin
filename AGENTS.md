@@ -40,7 +40,7 @@ Agent Plugins manifest at `/plugin.json`.
 - **Auth**: `/api/*` and `/mcp` require an OAuth token from the Quartal test Keycloak
   (`auth.mode: "custom"` in `qrtl.config.ts`); MCP clients log in with a pre-registered Keycloak
   client. Setup and troubleshooting: `docs/authentication.md`. Every tool requires the logged-in user
-  (`requireUid(ctx)`) and works only on that user's bank connections; a tool that takes an
+  (`requireUser(ctx)`) and works only on that user's bank connections; a tool that takes an
   `accountId` must resolve it with `requireAccountConnection` before calling Enable Banking. How
   connections are stored: `docs/bank-connection.md`.
 
