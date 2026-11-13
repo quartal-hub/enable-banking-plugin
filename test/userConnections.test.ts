@@ -42,6 +42,12 @@ async function connect(uid: string, accountId: string, bank = "Mock ASPSP") {
 beforeEach(() => {
   setPluginStore(unstoragePluginStore(createStorage({ driver: memoryDriver() })));
   request.mockReset();
+  // Print tokens are encrypted with a key derived from it
+  vi.stubEnv("ENABLE_BANKING_PRIVATE_KEY", "test-private-key");
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
 });
 
 describe("per-user connections", () => {
@@ -111,7 +117,14 @@ describe("per-user connections", () => {
       alice,
     );
     const token = new URL(url).searchParams.get("token") ?? "";
-    expect(await resolvePrintToken(token)).toMatchObject({ uid: "alice", accountId: "acc-a" });
+    expect(await resolvePrintToken(token)).toEqual({
+      uid: "alice",
+      accountId: "acc-a",
+      dateFrom: "2026-10-01",
+      dateTo: "2026-10-31",
+      bank: "Mock ASPSP",
+    });
+    expect(token).not.toContain("acc-a");
     expect(await resolvePrintToken("not-a-token")).toBeUndefined();
   });
 });

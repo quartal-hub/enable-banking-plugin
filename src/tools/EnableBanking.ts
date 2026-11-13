@@ -247,10 +247,10 @@ export class EnableBanking {
   }, ctx?: QuartalPluginContext): Promise<StatementPrintLink> {
     logToolCall("createStatementPrintLink", ctx);
     const uid = requireUid(ctx);
-    await requireAccountConnection(uid, input.accountId);
+    const { bank } = await requireAccountConnection(uid, input.accountId);
     const { accountId, dateFrom, dateTo } = input;
     const url = new URL(PRINT_PATH, redirectUrl());
-    url.searchParams.set("token", await createPrintToken({ uid, accountId, dateFrom, dateTo }));
+    url.searchParams.set("token", await createPrintToken({ uid, accountId, dateFrom, dateTo, bank }));
     return { url: url.href };
   }
 
