@@ -170,6 +170,5 @@ styles (DataTables, Tabulator), which these widgets do not use.
   deployed callback URL registered.
 - **No payments:** account information only, no payment initiation.
 
-How per-user authentication was planned, and where the implementation differs:
-[docs/user-authentication.md](docs/user-authentication.md). A framework workaround in the code (`notFound` status) is explained in
+A framework workaround in the code (`notFound` status) is explained in
 [docs/bank-connection.md](docs/bank-connection.md#framework-workarounds).

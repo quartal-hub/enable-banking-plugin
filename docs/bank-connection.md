@@ -98,7 +98,9 @@ Agent            Plugin                           Enable Banking / bank        B
 7. The model reads data with **`getAccountStatement(accountId)`**, **`getBalances(accountId)`** and
    **`listTransactions(accountId)`**. Each of them first resolves the account id to one of the
    user's connections; an account id that is not the user's gets the same "Unknown account id" as
-   one that does not exist, and Enable Banking is not called.
+   one that does not exist, and Enable Banking is not called. This check is essential: account
+   ids are plain UUIDs, and Enable Banking answers for any account the plugin has a session for,
+   so without it any logged-in user could read another user's account.
 
 `getAuthorizationResult` statuses: `pending` (user not back yet), `connected`, `failed`, and
 `notFound` (wrong id, another user's id, or older than 30 minutes).

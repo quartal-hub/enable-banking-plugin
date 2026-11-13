@@ -17,7 +17,7 @@ That mode's built-in values (in `@quartal/plugin`) are the Quartal test Keycloak
 `https://iam2026.test.qrtl.com/auth/realms/quartal`, scope `quartal-hub-test` and audience
 `https://hub.test.qrtl.com`. It is also what the experimental Quartal Hub context needs: the
 plugin keeps each user's bank connections in their Quartal Hub secrets, called with the user's
-token. (Until 2026-11-13 the plugin used `mode: "custom"` with the same three values.)
+token. (Earlier the plugin used `mode: "custom"` with the same three values.)
 
 - A request without a token gets `401` with a `WWW-Authenticate` header that points to the
   protected resource metadata at `/.well-known/oauth-protected-resource`.
