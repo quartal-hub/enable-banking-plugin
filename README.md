@@ -169,6 +169,3 @@ styles (DataTables, Tabulator), which these widgets do not use.
 - **Sandbox only:** production needs a separate, activated Enable Banking application and the
   deployed callback URL registered.
 - **No payments:** account information only, no payment initiation.
-
-A framework workaround in the code (`notFound` status) is explained in
-[docs/bank-connection.md](docs/bank-connection.md#framework-workarounds).

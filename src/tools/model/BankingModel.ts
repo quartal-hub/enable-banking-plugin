@@ -24,9 +24,6 @@ export interface AuthorizationResult {
    * `pending` until the user has finished at the bank, then `connected` or `failed`;
    * `notFound` when the id is not recognized or has expired (results are kept for 30 minutes)
    */
-  // "notFound" rather than "unknown": @quartal/plugin 1.0.0 generates a broken output schema for
-  // string literals spelled like TypeScript keywords. See "Framework workarounds" in
-  // docs/bank-connection.md.
   status: "pending" | "connected" | "failed" | "notFound";
   /** Bank name */
   bank?: string;
