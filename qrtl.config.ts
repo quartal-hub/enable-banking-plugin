@@ -7,12 +7,22 @@ export const SKIN_URL = "https://cdn.quartal.com/skins/default.css";
 export default defineQrtlConfig({
   title: "Enable Banking",
   description: "Bank account data via Enable Banking",
+  keywords: ["Banking"],
   // Auth mode: "anon" (no authentication), "quartal-hub" (OAuth2 via Quartal Hub), or
   // "custom" (your own OAuth2 / OIDC server).
   // Same issuer, scope and audience as the earlier `custom` config; required by the Hub context.
   auth: "quartal-hub",
-  // Logo and icons shown by MCP clients and the docs site can be added here too (`logo`, `icons`).
-  style: { skin: SKIN_URL },
+  // The icon shown by MCP clients and plugin catalogs; the docs site logo can be added too (`logo`).
+  style: {
+    skin: SKIN_URL,
+    icons: [
+      {
+        src: "https://cdn.quartal.com/img/integrations/icon/enable-banking.png",
+        sizes: ["256x256"],
+        mimeType: "image/png",
+      },
+    ],
+  },
   widgets: {
     // Widgets run in the MCP host's sandbox, which loads only the origins declared here: the skin and
     // everything it imports: fonts (Google Fonts), Bootstrap Icons (jsDelivr), and the table libraries'
