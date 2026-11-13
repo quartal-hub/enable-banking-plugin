@@ -1,0 +1,11 @@
+# Not uploaded by `vercel deploy`: secrets, local data and build output (Vercel builds itself).
+# The CLI does not read .gitignore, and its built-in list skips `.env.local` but not `.env`.
+.env
+.env.*
+*.pem
+.data/
+node_modules/
+dist/
+.astro/
+.vercel/
+src/qrtl-plugin/
