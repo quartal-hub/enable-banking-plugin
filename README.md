@@ -99,6 +99,11 @@ remembers the connection: *"What's my balance?"* works there without connecting 
 Claude Desktop, claude.ai and ChatGPT cannot reach `localhost`: they need a deployment or an HTTPS
 tunnel, whose callback URL must also be registered with Enable Banking.
 
+### Deploy to Vercel
+
+The plugin runs on Vercel with a Redis database for bank logins in progress (bank connections are
+in the users' Quartal Hub secrets): [docs/hosting-on-vercel.md](docs/hosting-on-vercel.md).
+
 ### Sandbox test data
 
 In the sandbox, use the bank **Mock ASPSP** (any country, no credentials). Its accounts start

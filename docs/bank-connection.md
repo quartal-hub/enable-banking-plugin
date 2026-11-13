@@ -40,7 +40,8 @@ signs in to can read them too (shared audience).
 
 The short-lived store must be shared by every server instance: on serverless hosts such as Vercel
 the callback often reaches another instance than the one that started the authorization (tried:
-19 seconds after `startAuthorization`, with a single user), so there it is Redis.
+19 seconds after `startAuthorization`, with a single user), so there it is Redis
+([hosting-on-vercel.md](./hosting-on-vercel.md#why-redis-is-needed)).
 With the memory store of local development, a restart during a bank login makes that connect
 fail. Every tool call and callback logs the instance id (`instance=…`).
 

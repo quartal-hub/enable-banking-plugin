@@ -43,7 +43,8 @@ Agent Plugins manifest at `/plugin.json`.
   (`requireUser(ctx)`) and works only on that user's bank connections; a tool that takes an
   `accountId` must resolve it with `requireAccountConnection` before calling Enable Banking, and
   a tool that reads connections must go through `signedIn(ctx)` so it first saves connections the
-  bank callback parked. How connections are stored: `docs/bank-connection.md`.
+  bank callback parked. How connections are stored: `docs/bank-connection.md`. Hosting on Vercel:
+  `docs/hosting-on-vercel.md`.
 
 ## Verify changes
 
