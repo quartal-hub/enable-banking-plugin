@@ -20,7 +20,8 @@
     "jose": "^6.2.15",
     "lru-cache": "^11.5.3",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "unstorage": "1.17.6"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.12",

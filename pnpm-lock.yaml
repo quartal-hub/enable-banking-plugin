@@ -35,6 +35,9 @@ importers:
       react-dom:
         specifier: ^19.0.0
         version: 19.3.1(react@19.3.1)
+      unstorage:
+        specifier: 1.17.6
+        version: 1.17.6
     devDependencies:
       '@astrojs/check':
         specifier: ^0.9.12
