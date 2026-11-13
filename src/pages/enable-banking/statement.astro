@@ -1,16 +1,18 @@
 ---
 // The printable account statement, opened in a browser tab by the Account statement widget's print
 // button (MCP hosts block the print dialog inside widgets). The short-lived `token` from
-// createStatementPrintLink names the account and period; the statement is built fresh here.
+// createStatementPrintLink names the user, account and period; the statement is built fresh here,
+// after checking that the account still belongs to that user.
 import StatementView from "../../components/StatementView.tsx";
 import { SKIN_URL } from "../../../qrtl.config.ts";
+import { fetchAccountStatement } from "../../enable-banking/AccountData.ts";
+import { requireAccountConnection, withConnection } from "../../enable-banking/Connections.ts";
 import { resolvePrintToken } from "../../enable-banking/PrintLinks.ts";
-import { EnableBanking } from "../../tools/EnableBanking.ts";
 import type { AccountStatement } from "../../tools/model/BankingModel.ts";
 
 export const prerender = false;
 
-const target = resolvePrintToken(Astro.url.searchParams.get("token") ?? "");
+const target = await resolvePrintToken(Astro.url.searchParams.get("token") ?? "");
 let statement: AccountStatement | undefined;
 let error: string | undefined;
 if (!target) {
@@ -18,7 +20,10 @@ if (!target) {
   Astro.response.status = 404;
 } else {
   try {
-    statement = await EnableBanking.getAccountStatement(target);
+    const connection = await requireAccountConnection(target.uid, target.accountId);
+    statement = await withConnection(connection, () =>
+      fetchAccountStatement(target.accountId, target.dateFrom, target.dateTo),
+    );
   } catch (e) {
     error = e instanceof Error ? e.message : String(e);
     Astro.response.status = 502;

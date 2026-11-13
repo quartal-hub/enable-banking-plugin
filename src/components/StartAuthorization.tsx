@@ -5,7 +5,7 @@ import type { AuthorizationStart } from "../tools/model/BankingModel.ts";
 /**
  * Widget for the `startAuthorization` tool: a button that opens the bank login URL through the MCP
  * host. When the user is done at the bank, they tell the assistant, which then calls
- * `getAuthorizationResult` for the new session.
+ * `getAuthorizationResult` to check the connection.
  */
 export default function StartAuthorization() {
   const bridge = useRef<WidgetBridge<AuthorizationStart> | null>(null);

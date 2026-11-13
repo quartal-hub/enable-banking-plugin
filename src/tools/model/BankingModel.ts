@@ -30,18 +30,42 @@ export interface AuthorizationResult {
   status: "pending" | "connected" | "failed" | "notFound";
   /** Bank name */
   bank?: string;
-  /** Session id for `listAccounts`, once connected */
-  sessionId?: string;
   /** The accounts the user granted access to, once connected */
   accounts?: Account[];
   /** What went wrong, when failed */
   error?: string;
 }
 
+/** A bank the user has connected */
+export interface Connection {
+  /** Id for `listAccounts` and `disconnectBank` */
+  connectionId: string;
+  /** Bank name */
+  bank: string;
+  /** Two-letter country code of the bank */
+  country: string;
+  /** `active`, or `ended` when the bank no longer gives access and the user must connect again */
+  status: "active" | "ended";
+  /**
+   * When the bank access ends at the latest
+   * @format date-time
+   */
+  validUntil: string;
+  /**
+   * When the bank was connected
+   * @format date-time
+   */
+  connectedAt: string;
+  /** Number of accounts the user shared */
+  accountCount: number;
+}
+
 /** A bank account the user has granted access to */
 export interface Account {
-  /** Account id (session-specific) */
+  /** Account id, changes when the bank is connected again */
   uid: string;
+  /** Bank name, in `listAccounts` */
+  bank?: string;
   /** IBAN, when the bank reports one */
   iban?: string;
   /** Account name */

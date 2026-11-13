@@ -26,9 +26,6 @@ importers:
       jose:
         specifier: ^6.2.15
         version: 6.2.15
-      lru-cache:
-        specifier: ^11.5.3
-        version: 11.5.3
       react:
         specifier: ^19.0.0
         version: 19.3.1

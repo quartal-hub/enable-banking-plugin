@@ -1,12 +1,15 @@
 ---
 // Enable Banking redirects the user's browser here after bank authorization, with `code` and
-// `state` (or `error`) in the query string. Exchanges the code for a session and stores the outcome
-// for `getAuthorizationResult`. Astro escapes every value rendered below.
+// `state` (or `error`) in the query string. The redirect carries no bearer token: the user is the
+// one who started the authorization, found through the random, single-use `state` the plugin
+// created. Exchanges the code for a session, saves it as that user's connection and stores the
+// outcome for `getAuthorizationResult`. Astro escapes every value rendered below.
 import {
   completeAuthorization,
   failAuthorization,
   getPendingAuthorization,
 } from "../../enable-banking/AuthorizationStore.ts";
+import { saveConnection } from "../../enable-banking/Connections.ts";
 import { enableBankingRequest } from "../../enable-banking/EnableBankingClient.ts";
 import { type RawAccount, toAccount } from "../../enable-banking/toAccount.ts";
 import { SKIN_URL } from "../../../qrtl.config.ts";
@@ -15,7 +18,7 @@ export const prerender = false;
 
 const params = Astro.url.searchParams;
 const state = params.get("state") ?? "";
-const pending = getPendingAuthorization(state);
+const pending = await getPendingAuthorization(state);
 let title = "Unknown or expired request";
 let message = "Start connecting the bank again from the chat.";
 let status = 400;
@@ -27,16 +30,25 @@ if (pending) {
     const description = params.get("error_description");
     message = error ? (description ? `${error}: ${description}` : error) : "The bank returned no code.";
     title = "Bank connection was not completed";
-    failAuthorization(state, message);
+    await failAuthorization(state, message);
   } else {
     try {
-      const session = await enableBankingRequest<{ session_id: string; accounts: RawAccount[] }>(
-        "POST",
-        "/sessions",
-        { code },
-      );
+      const session = await enableBankingRequest<{
+        session_id: string;
+        accounts: RawAccount[];
+        access?: { valid_until?: string };
+      }>("POST", "/sessions", { code });
       const accounts = session.accounts.map(toAccount);
-      completeAuthorization(state, session.session_id, accounts);
+      await saveConnection({
+        uid: pending.uid,
+        sessionId: session.session_id,
+        bank: pending.bank,
+        country: pending.country,
+        psuType: pending.psuType,
+        accounts,
+        validUntil: session.access?.valid_until ?? pending.validUntil,
+      });
+      await completeAuthorization(state, accounts);
       title = `${pending.bank} connected`;
       const shared = accounts.length
         ? `${accounts.length} account${accounts.length === 1 ? "" : "s"} shared.`
@@ -46,7 +58,7 @@ if (pending) {
     } catch (e) {
       message = e instanceof Error ? e.message : String(e);
       title = "Bank connection failed";
-      failAuthorization(state, message);
+      await failAuthorization(state, message);
       status = 502;
     }
   }

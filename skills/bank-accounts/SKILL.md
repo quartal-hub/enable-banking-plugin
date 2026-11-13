@@ -1,17 +1,20 @@
 ---
 name: bank-accounts
-description: Use this skill when the user wants to connect a bank account, or asks about their bank accounts, balances, transactions, account statements (tiliote), spending or income, using the Enable Banking tools of this plugin (listBanks, startAuthorization, getAuthorizationResult, listAccounts, getBalances, listTransactions, getAccountStatement).
+description: Use this skill when the user wants to connect a bank account, or asks about their bank accounts, balances, transactions, account statements (tiliote), spending or income, using the Enable Banking tools of this plugin (listBanks, startAuthorization, getAuthorizationResult, listConnections, listAccounts, getBalances, listTransactions, getAccountStatement, disconnectBank).
 ---
 
 # Bank accounts through Enable Banking
 
 These tools read bank account information (accounts, balances, transactions) after the user has
-connected their bank. They cannot make payments or move money.
+connected their bank. They cannot make payments or move money. The plugin keeps the user's bank
+connections on the server, across conversations: every tool works on the logged-in user's own
+banks, and no id has to be carried over from earlier.
 
 ## 1. Connect a bank (only when needed)
 
-Before starting a connection, check whether this conversation already has one: an earlier
-`getAuthorizationResult` result with `status: "connected"`. If so, skip to step 2.
+Start with `listAccounts`. If it returns the accounts the user asks about, skip to step 2. If it
+returns nothing, or not the bank the user means, call `listConnections`: a connection with
+`status: "ended"` must be connected again; otherwise connect the bank:
 
 1. If the user has not named their bank, ask for it and the country. Call `listBanks` with the
    two-letter country code (`FI`, `SE`, `DE`, …) and use the bank's `name` **exactly** as returned.
@@ -22,7 +25,7 @@ Before starting a connection, check whether this conversation already has one: a
 3. Tell the user to log in at their bank, approve access, and come back. Do not call
    `startAuthorization` again while they are doing this: each call creates a new, separate login.
 4. When the user says they are done, call `getAuthorizationResult` with the `authorizationId`:
-   - `connected`: use the returned `sessionId` and `accounts`.
+   - `connected`: the bank's `accounts` are connected; they are now also in `listAccounts`.
    - `pending`: the user has not finished yet. Ask them to complete the login, then check again.
      Do not poll in a loop.
    - `failed`: tell the user the `error` and offer to start again.
@@ -30,8 +33,10 @@ Before starting a connection, check whether this conversation already has one: a
 
 ## 2. Read accounts, balances and transactions
 
-- `listAccounts` with the `sessionId` returns the accounts. Each has a `uid`: use it as the
-  `accountId` for `getBalances` and `listTransactions`. The `uid` is specific to the session.
+- `listAccounts` returns the accounts of all the user's connected banks, each with its `bank`
+  (pass a `connectionId` from `listConnections` for one bank only). Each account has a `uid`: use
+  it as the `accountId` for `getBalances`, `listTransactions` and `getAccountStatement`. The `uid`
+  changes when the bank is connected again, so get it from `listAccounts`, not from memory.
 - Account `type`: `CACC` current account, `SVGS` savings, `CARD` card account, `LOAN` loan,
   `CASH` cash account, `TRAN` transaction account. Use these words with the user, not the codes.
 - When the user has several accounts and does not say which, use the current account (`CACC`) for
@@ -80,14 +85,20 @@ of guessing.
 
 Tool errors say what happened and what to do; follow them. In addition:
 
-- After "The bank connection has ended", do not retry with the old session id.
+- After "The bank connection has ended", do not retry: ask the user to connect the bank again
+  (step 1), then call `listAccounts` for the new account ids.
 - `listBanks` returns no matching bank: the bank may not be supported in that country; show the
   closest names returned.
 
-## 4. Privacy
+## 4. Disconnecting
+
+`disconnectBank` with a `connectionId` from `listConnections` ends the plugin's access to that
+bank. Call it only when the user asks to disconnect or remove a bank, and confirm which bank first.
+
+## 5. Privacy
 
 - Bank data is personal. Show only what the user asked for.
-- Do not repeat the session id or account `uid`s to the user; they are internal. Refer to accounts
+- Do not repeat account `uid`s or `connectionId`s to the user; they are internal. Refer to accounts
   by name and type, and to an IBAN by its last four digits (`… 0785`) unless the user asks for the
   full IBAN.
 - Never ask the user for their bank password or login codes: they enter those only on the bank's

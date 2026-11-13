@@ -1,17 +1,22 @@
 import { Helpers, type QuartalPluginContext } from "@quartal/plugin";
-import { enableBankingRequest } from "../enable-banking/EnableBankingClient.ts";
-import { sessionEndedError } from "../enable-banking/EnableBankingError.ts";
+import { fetchAccountStatement, fetchBalances, fetchTransactionPage } from "../enable-banking/AccountData.ts";
 import {
   createAuthorizationState,
   findAuthorizationResult,
   linkAuthorizationId,
 } from "../enable-banking/AuthorizationStore.ts";
-import { buildAccountStatement } from "../enable-banking/buildAccountStatement.ts";
+import {
+  findConnection,
+  listStoredConnections,
+  removeConnection,
+  requireAccountConnection,
+  requireUid,
+  toConnection,
+  withConnection,
+} from "../enable-banking/Connections.ts";
+import { enableBankingRequest } from "../enable-banking/EnableBankingClient.ts";
 import { logToolCall } from "../enable-banking/logToolCall.ts";
 import { createPrintToken } from "../enable-banking/PrintLinks.ts";
-import { type RawAccount, toAccount } from "../enable-banking/toAccount.ts";
-import { type RawBalance, toBalance } from "../enable-banking/toBalance.ts";
-import { type RawTransaction, toTransaction } from "../enable-banking/toTransaction.ts";
 import type {
   Account,
   AccountStatement,
@@ -19,20 +24,24 @@ import type {
   AuthorizationStart,
   Balance,
   Bank,
+  Connection,
   StatementPrintLink,
-  Transaction,
   TransactionPage,
 } from "./model/BankingModel.ts";
 
 /** Where Enable Banking sends the user's browser back to. Must match a registered redirect URL. */
 const CALLBACK_PATH = "/enable-banking/callback";
 
+/** Path of the printable statement page (`src/pages/enable-banking/statement.astro`) */
+const PRINT_PATH = "/enable-banking/statement";
+
 /** Days of account access requested from the bank */
 const ACCESS_DAYS = 90;
 
 /**
  * Bank account information through Enable Banking: list banks, connect a bank account, and read
- * accounts and balances
+ * accounts and balances. Every tool works on the logged-in user's own bank connections, which are
+ * kept on the server.
  */
 export class EnableBanking {
   /**
@@ -59,7 +68,7 @@ export class EnableBanking {
   /**
    * Starts connecting a bank account. Returns a URL the user opens to log in to their bank and
    * approve access. When they are done, `getAuthorizationResult` with the returned
-   * `authorizationId` gives the session id for `listAccounts`.
+   * `authorizationId` tells whether it worked; the bank's accounts are then in `listAccounts`.
    * @param input The bank to connect
    * @param ctx The logged-in user
    * @returns The bank login URL
@@ -77,61 +86,66 @@ export class EnableBanking {
     psuType?: "personal" | "business";
   }, ctx?: QuartalPluginContext): Promise<AuthorizationStart> {
     logToolCall("startAuthorization", ctx);
-    const state = createAuthorizationState(input.bank);
+    const uid = requireUid(ctx);
+    const country = input.country.toUpperCase();
+    const psuType = input.psuType ?? "personal";
     const validUntil = new Date(Date.now() + ACCESS_DAYS * 24 * 3600 * 1000).toISOString();
+    const state = await createAuthorizationState({ uid, bank: input.bank, country, psuType, validUntil });
     const res = await enableBankingRequest<{ url: string; authorization_id: string }>("POST", "/auth", {
       access: { valid_until: validUntil },
-      aspsp: { name: input.bank, country: input.country.toUpperCase() },
+      aspsp: { name: input.bank, country },
       state,
       redirect_url: redirectUrl(),
-      psu_type: input.psuType ?? "personal",
+      psu_type: psuType,
     });
-    linkAuthorizationId(state, res.authorization_id);
+    await linkAuthorizationId(state, res.authorization_id);
     return { url: res.url, authorizationId: res.authorization_id };
   }
 
   /**
    * Checks whether the user has finished connecting their bank. Call it after the user says
-   * they are done at the bank; once `status` is `connected`, the result has the session id and
-   * accounts.
+   * they are done at the bank; once `status` is `connected`, the result has the accounts.
    * @param input The authorization
    * @param ctx The logged-in user
-   * @returns The authorization's status, and the session once connected
+   * @returns The authorization's status, and the accounts once connected
    * @readOnly
    */
-  static getAuthorizationResult(input: {
+  static async getAuthorizationResult(input: {
     /** The `authorizationId` returned by `startAuthorization` */
     authorizationId: string;
-  }, ctx?: QuartalPluginContext): AuthorizationResult {
+  }, ctx?: QuartalPluginContext): Promise<AuthorizationResult> {
     logToolCall("getAuthorizationResult", ctx);
-    return findAuthorizationResult(input.authorizationId);
+    return findAuthorizationResult(requireUid(ctx), input.authorizationId);
   }
 
   /**
-   * Lists the accounts of a connected bank session
-   * @param input The session
+   * Lists the banks the user has connected, and whether each still gives access
+   * @param _input No input
    * @param ctx The logged-in user
-   * @returns The accounts
+   * @returns The connections, oldest first
+   * @readOnly
+   */
+  static async listConnections(_input?: Record<string, never>, ctx?: QuartalPluginContext): Promise<Connection[]> {
+    logToolCall("listConnections", ctx);
+    return (await listStoredConnections(requireUid(ctx))).map(toConnection);
+  }
+
+  /**
+   * Lists the accounts of the user's connected banks
+   * @param input Optional connection
+   * @param ctx The logged-in user
+   * @returns The accounts of the active connections
    * @readOnly
    */
   static async listAccounts(input: {
-    /** Session id shown after connecting a bank */
-    sessionId: string;
+    /** Only the accounts of this connection from `listConnections` */
+    connectionId?: string;
   }, ctx?: QuartalPluginContext): Promise<Account[]> {
     logToolCall("listAccounts", ctx);
-    // The session lists account ids only; name, IBAN and currency come from each account's details.
-    const session = await enableBankingRequest<{ status?: string; accounts?: string[] }>(
-      "GET",
-      `/sessions/${encodeURIComponent(input.sessionId)}`,
-    );
-    // A closed or expired session still answers here; only its account calls fail.
-    if (session.status && session.status !== "AUTHORIZED") throw sessionEndedError(session.status);
-    const details = await Promise.all(
-      (session.accounts ?? []).map((uid) =>
-        enableBankingRequest<RawAccount>("GET", `/accounts/${encodeURIComponent(uid)}/details`),
-      ),
-    );
-    return details.map(toAccount);
+    const connections = await listStoredConnections(requireUid(ctx));
+    return connections
+      .filter((c) => c.status === "active" && (!input.connectionId || c.connectionId === input.connectionId))
+      .flatMap((c) => c.accounts.map((a) => ({ ...a, bank: c.bank })));
   }
 
   /**
@@ -146,11 +160,8 @@ export class EnableBanking {
     accountId: string;
   }, ctx?: QuartalPluginContext): Promise<Balance[]> {
     logToolCall("getBalances", ctx);
-    const res = await enableBankingRequest<{ balances: RawBalance[] }>(
-      "GET",
-      `/accounts/${encodeURIComponent(input.accountId)}/balances`,
-    );
-    return res.balances.map(toBalance);
+    const connection = await requireAccountConnection(requireUid(ctx), input.accountId);
+    return withConnection(connection, () => fetchBalances(input.accountId));
   }
 
   /**
@@ -178,19 +189,8 @@ export class EnableBanking {
     continuationKey?: string;
   }, ctx?: QuartalPluginContext): Promise<TransactionPage> {
     logToolCall("listTransactions", ctx);
-    const query = new URLSearchParams();
-    if (input.dateFrom) query.set("date_from", input.dateFrom);
-    if (input.dateTo) query.set("date_to", input.dateTo);
-    if (input.continuationKey) query.set("continuation_key", input.continuationKey);
-    const qs = query.size ? `?${query}` : "";
-    const res = await enableBankingRequest<{ transactions: RawTransaction[]; continuation_key?: string | null }>(
-      "GET",
-      `/accounts/${encodeURIComponent(input.accountId)}/transactions${qs}`,
-    );
-    return {
-      transactions: res.transactions.map(toTransaction),
-      continuationKey: res.continuation_key ?? undefined,
-    };
+    const connection = await requireAccountConnection(requireUid(ctx), input.accountId);
+    return withConnection(connection, () => fetchTransactionPage(input.accountId, input));
   }
 
   /**
@@ -218,23 +218,8 @@ export class EnableBanking {
     dateTo?: string;
   }, ctx?: QuartalPluginContext): Promise<AccountStatement> {
     logToolCall("getAccountStatement", ctx);
-    const period = statementPeriod(input.dateFrom, input.dateTo);
-    const [details, balances, transactions] = await Promise.all([
-      enableBankingRequest<RawAccount>("GET", `/accounts/${encodeURIComponent(input.accountId)}/details`),
-      EnableBanking.getBalances({ accountId: input.accountId }, ctx),
-      // From the period start until today: later transactions are needed to work back from the
-      // current balance to the balances of the period.
-      fetchAllTransactions(input.accountId, period.dateFrom, ctx),
-    ]);
-    return buildAccountStatement({
-      account: toAccount(details),
-      balances,
-      transactions: transactions.transactions,
-      complete: transactions.complete,
-      dateFrom: period.dateFrom,
-      dateTo: period.dateTo,
-      today: isoDate(new Date()),
-    });
+    const connection = await requireAccountConnection(requireUid(ctx), input.accountId);
+    return withConnection(connection, () => fetchAccountStatement(input.accountId, input.dateFrom, input.dateTo));
   }
 
   /**
@@ -246,7 +231,7 @@ export class EnableBanking {
    * @visibility app
    * @destructive false
    */
-  static createStatementPrintLink(input: {
+  static async createStatementPrintLink(input: {
     /** Account `uid` from `listAccounts` */
     accountId: string;
     /**
@@ -259,62 +244,34 @@ export class EnableBanking {
      * @format date
      */
     dateTo: string;
-  }, ctx?: QuartalPluginContext): StatementPrintLink {
+  }, ctx?: QuartalPluginContext): Promise<StatementPrintLink> {
     logToolCall("createStatementPrintLink", ctx);
+    const uid = requireUid(ctx);
+    await requireAccountConnection(uid, input.accountId);
+    const { accountId, dateFrom, dateTo } = input;
     const url = new URL(PRINT_PATH, redirectUrl());
-    url.searchParams.set("token", createPrintToken(input));
+    url.searchParams.set("token", await createPrintToken({ uid, accountId, dateFrom, dateTo }));
     return { url: url.href };
   }
-}
 
-/** Path of the printable statement page (`src/pages/enable-banking/statement.astro`) */
-const PRINT_PATH = "/enable-banking/statement";
-
-/** Upper limit of transaction pages fetched for one statement */
-const MAX_STATEMENT_PAGES = 50;
-
-/**
- * All transactions booked from `dateFrom` on, following the `continuationKey` pages of
- * `listTransactions`
- * @param accountId Account `uid`
- * @param dateFrom First booking date
- * @param ctx The logged-in user
- */
-async function fetchAllTransactions(
-  accountId: string,
-  dateFrom: string,
-  ctx: QuartalPluginContext | undefined,
-): Promise<{ transactions: Transaction[]; complete: boolean }> {
-  const transactions: Transaction[] = [];
-  let continuationKey: string | undefined;
-  for (let page = 0; page < MAX_STATEMENT_PAGES; page++) {
-    const res = await EnableBanking.listTransactions({ accountId, dateFrom, continuationKey }, ctx);
-    transactions.push(...res.transactions);
-    continuationKey = res.continuationKey;
-    if (!continuationKey) return { transactions, complete: true };
+  /**
+   * Disconnects a bank: ends the plugin's access to it at Enable Banking and forgets the
+   * connection. Only when the user asks for it.
+   * @param input The connection
+   * @param ctx The logged-in user
+   * @returns The disconnected connection
+   * @destructive
+   */
+  static async disconnectBank(input: {
+    /** `connectionId` from `listConnections` */
+    connectionId: string;
+  }, ctx?: QuartalPluginContext): Promise<Connection> {
+    logToolCall("disconnectBank", ctx);
+    const connection = await findConnection(requireUid(ctx), input.connectionId);
+    if (!connection) throw new Error("Unknown connection id. Use a connectionId from listConnections.");
+    await removeConnection(connection);
+    return toConnection(connection);
   }
-  return { transactions, complete: false };
-}
-
-/** A date as `YYYY-MM-DD` (UTC) */
-function isoDate(date: Date): string {
-  return date.toISOString().slice(0, 10);
-}
-
-/**
- * The statement period: the given dates, defaulting to the previous calendar month
- * @param dateFrom Given first day
- * @param dateTo Given last day
- */
-function statementPeriod(dateFrom?: string, dateTo?: string): { dateFrom: string; dateTo: string } {
-  const now = new Date();
-  const year = now.getUTCFullYear();
-  const month = now.getUTCMonth();
-  const from = dateFrom ?? isoDate(new Date(Date.UTC(year, month - 1, 1)));
-  // Day 0 of a month is the last day of the month before.
-  const to = dateTo ?? isoDate(new Date(Date.UTC(year, month, 0)));
-  if (from > to) throw new Error(`The period start (${from}) is after its end (${to}).`);
-  return { dateFrom: from, dateTo: to };
 }
 
 /** The callback URL: `ENABLE_BANKING_REDIRECT_URL`, or the local dev server by default */

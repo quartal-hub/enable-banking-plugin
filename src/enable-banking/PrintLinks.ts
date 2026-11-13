@@ -1,7 +1,9 @@
-import { LRUCache } from "lru-cache";
+import { getPluginStore } from "./PluginStore.ts";
 
-/** What a print link shows: the statement of one account for one period */
+/** What a print link shows: the statement of one of a user's accounts for one period */
 export interface PrintLinkTarget {
+  /** The user who created the link (`ctx.uid`) */
+  uid: string;
   accountId: string;
   dateFrom: string;
   dateTo: string;
@@ -10,21 +12,18 @@ export interface PrintLinkTarget {
 // Short-lived random tokens for the printable statement page. The page is opened in a plain browser
 // tab, which carries no credentials, so the token stands in for the authenticated tool call that
 // created it, and the account id stays out of the URL. Tokens expire 10 minutes after they are
-// created; at most 1000 are kept. On globalThis so the tool modules and the print page share one
-// cache even if the dev server loads this module more than once. In-memory only, like the
-// authorization store.
-const store = ((globalThis as Record<string, unknown>).__enableBankingPrintLinks ??= new LRUCache<
-  string,
-  PrintLinkTarget
->({ max: 1000, ttl: 10 * 60 * 1000 })) as LRUCache<string, PrintLinkTarget>;
+// created.
+
+/** Lifetime of a print token */
+const TTL_SECONDS = 10 * 60;
 
 /**
  * Stores a target and returns its new random token
- * @param target Account and period
+ * @param target User, account and period
  */
-export function createPrintToken(target: PrintLinkTarget): string {
+export async function createPrintToken(target: PrintLinkTarget): Promise<string> {
   const token = crypto.randomUUID();
-  store.set(token, { ...target });
+  await getPluginStore().set(`print-tokens:${token}`, target, TTL_SECONDS);
   return token;
 }
 
@@ -33,6 +32,7 @@ export function createPrintToken(target: PrintLinkTarget): string {
  * until it expires, so reloading the page works.
  * @param token The token from the URL
  */
-export function resolvePrintToken(token: string): PrintLinkTarget | undefined {
-  return store.get(token);
+export async function resolvePrintToken(token: string): Promise<PrintLinkTarget | undefined> {
+  if (!/^[\w-]+$/.test(token)) return undefined;
+  return getPluginStore().get<PrintLinkTarget>(`print-tokens:${token}`);
 }
