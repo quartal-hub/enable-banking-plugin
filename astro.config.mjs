@@ -1,6 +1,7 @@
 import process from "node:process";
 import { defineConfig } from "astro/config";
 import node from "@astrojs/node";
+import vercel from "@astrojs/vercel";
 import react from "@astrojs/react";
 import qrtlPlugin from "@quartal/plugin/astro";
 
@@ -14,7 +15,9 @@ const dev = process.argv.includes("dev");
 
 export default defineConfig({
   output: "server",
-  adapter: node({ mode: "standalone" }),
+  // Vercel sets VERCEL=1 when it builds; everywhere else the plugin is a standalone Node.js server
+  // (`node ./dist/server/entry.mjs`).
+  adapter: process.env.VERCEL ? vercel() : node({ mode: "standalone" }),
   integrations: [react(), qrtlPlugin()],
   security: dev
     ? {

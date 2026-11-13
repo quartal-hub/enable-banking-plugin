@@ -7,3 +7,4 @@ src/qrtl-plugin/
 !.env.example
 *.pem
 .data/
+.vercel/

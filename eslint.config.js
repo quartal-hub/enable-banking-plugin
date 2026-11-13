@@ -7,7 +7,7 @@ import reactHooks from "eslint-plugin-react-hooks";
 import tseslint from "typescript-eslint";
 
 export default defineConfig(
-  { ignores: ["dist/", ".astro/", "src/qrtl-plugin/"] },
+  { ignores: ["dist/", ".astro/", ".vercel/", "src/qrtl-plugin/"] },
   js.configs.recommended,
   tseslint.configs.recommendedTypeChecked,
   {

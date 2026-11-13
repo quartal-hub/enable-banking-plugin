@@ -1,6 +1,7 @@
 {
   "name": "enable-banking-plugin",
   "type": "module",
+  "packageManager": "pnpm@11.28.11",
   "version": "0.1.0",
   "description": "Bank account data via Enable Banking",
   "private": true,
@@ -15,6 +16,7 @@
   "dependencies": {
     "@astrojs/node": "^11.0.0",
     "@astrojs/react": "^6.0.0",
+    "@astrojs/vercel": "^11.0.21",
     "@quartal/plugin": "^1.1.0",
     "astro": "^7.0.0",
     "jose": "^6.2.15",
