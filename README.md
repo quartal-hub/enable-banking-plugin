@@ -1,4 +1,4 @@
-# Enable Banking Plugin
+# Enable Banking
 
 Bank account information for AI agents through [Enable Banking](https://enablebanking.com): an
 agent connects the user's bank account and reads accounts, balances and transactions. Users log in

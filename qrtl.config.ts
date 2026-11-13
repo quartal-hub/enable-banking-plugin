@@ -5,7 +5,7 @@ export const SKIN_URL = "https://cdn.quartal.com/skins/default.css";
 
 // Plugin metadata and options — see https://plugin.quartal.com for the full reference.
 export default defineQrtlConfig({
-  title: "Enable Banking Plugin",
+  title: "Enable Banking",
   description: "Bank account data via Enable Banking",
   // Auth mode: "anon" (no authentication), "quartal-hub" (OAuth2 via Quartal Hub), or
   // "custom" (your own OAuth2 / OIDC server).

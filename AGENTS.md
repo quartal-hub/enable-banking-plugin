@@ -1,4 +1,4 @@
-# Enable Banking Plugin — guide for coding agents
+# Enable Banking — guide for coding agents
 
 This is a **Quartal Plugin**: an Astro app where plain TypeScript classes become MCP tools,
 REST actions, widgets and Agent Skills. Full documentation: <https://plugin.quartal.com>
