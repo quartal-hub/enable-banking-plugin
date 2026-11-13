@@ -19,6 +19,7 @@
     "@astrojs/vercel": "^11.0.21",
     "@quartal/plugin": "^1.1.0",
     "astro": "^7.0.0",
+    "ioredis": "^5.11.1",
     "jose": "^6.2.15",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

@@ -1,6 +1,7 @@
 import { Helpers } from "@quartal/plugin";
-import { createStorage, type Storage } from "unstorage";
-import fsDriver from "unstorage/drivers/fs";
+import { createStorage, type Driver, type Storage } from "unstorage";
+import memoryDriver from "unstorage/drivers/memory";
+import redisDriver from "unstorage/drivers/redis";
 
 /** A stored value and when it expires */
 interface Entry<T> {
@@ -10,9 +11,9 @@ interface Entry<T> {
 }
 
 /**
- * The plugin's persistent key-value store: pending authorizations, bank connections and print
- * tokens. Keys are `:`-separated segments; every segment must be a UUID, a hash or another value
- * of letters, digits and `-` only.
+ * The plugin's short-lived key-value store: started bank authorizations and the connections the
+ * callback parks until the user's next tool call. Keys are `:`-separated segments; every segment
+ * must be a UUID, a hash or another value of letters, digits and `-` only.
  */
 export interface PluginStore {
   /**
@@ -74,17 +75,26 @@ export function unstoragePluginStore(storage: Storage): PluginStore {
 const GLOBAL_KEY = "__enableBankingStore";
 
 /**
- * The store: files under `ENABLE_BANKING_DATA_DIR` (default `.data`) unless another one was set
- * with `setPluginStore`. The `fs` driver suits one Node.js process with a persistent disk; for
- * several instances or serverless hosting, set a shared store (e.g. unstorage's Redis or
- * Cloudflare KV driver) here.
+ * The store, unless another one was set with `setPluginStore`: Redis at `REDIS_URL` when it is
+ * set, shared by every server instance; otherwise this instance's memory, which is enough for one
+ * local process. Its data lives at most 30 minutes.
+ * @throws On Vercel without `REDIS_URL`: there the bank callback and the user's tool calls can run
+ * on different instances, so a memory store would make bank connects fail.
  */
 export function getPluginStore(): PluginStore {
   const global = globalThis as Record<string, unknown>;
-  global[GLOBAL_KEY] ??= unstoragePluginStore(
-    createStorage({ driver: fsDriver({ base: Helpers.getEnvVar("ENABLE_BANKING_DATA_DIR") ?? ".data" }) }),
-  );
+  global[GLOBAL_KEY] ??= unstoragePluginStore(createStorage({ driver: storeDriver() }));
   return global[GLOBAL_KEY] as PluginStore;
+}
+
+/** The unstorage driver for `getPluginStore` */
+function storeDriver(): Driver {
+  const url = Helpers.getEnvVar("REDIS_URL");
+  if (url) return redisDriver({ url, base: "enable-banking", scanCount: 1000 });
+  if (Helpers.getEnvVar("VERCEL")) {
+    throw new Error("REDIS_URL is not set: connect the Redis store to the Vercel project (Storage → Connect Project).");
+  }
+  return memoryDriver();
 }
 
 /**

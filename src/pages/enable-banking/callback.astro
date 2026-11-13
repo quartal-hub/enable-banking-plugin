@@ -11,6 +11,7 @@ import {
   getPendingAuthorization,
 } from "../../enable-banking/AuthorizationStore.ts";
 import { enableBankingRequest } from "../../enable-banking/EnableBankingClient.ts";
+import { logCallback } from "../../enable-banking/logToolCall.ts";
 import { type RawAccount, toAccount } from "../../enable-banking/toAccount.ts";
 import { SKIN_URL } from "../../../qrtl.config.ts";
 
@@ -19,6 +20,7 @@ export const prerender = false;
 const params = Astro.url.searchParams;
 const state = params.get("state") ?? "";
 const pending = await getPendingAuthorization(state);
+logCallback(pending !== undefined);
 let title = "Unknown or expired request";
 let message = "The request has expired, or the plugin was restarted. Start connecting the bank again from the chat.";
 let status = 400;

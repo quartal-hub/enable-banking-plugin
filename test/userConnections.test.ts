@@ -1,9 +1,5 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import type { QuartalPluginContext } from "@quartal/plugin";
 import { createStorage } from "unstorage";
-import fsDriver from "unstorage/drivers/fs";
 import memoryDriver from "unstorage/drivers/memory";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -196,23 +192,15 @@ describe("authorizations", () => {
   });
 });
 
-describe("persistent store", () => {
-  let dir: string;
-  beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), "enable-banking-store-"));
-  });
-  afterEach(async () => {
-    await rm(dir, { recursive: true, force: true });
-  });
-
+describe("plugin store", () => {
   it("drops expired values on read", async () => {
-    const store = unstoragePluginStore(createStorage({ driver: fsDriver({ base: dir }) }));
+    const store = unstoragePluginStore(createStorage({ driver: memoryDriver() }));
     vi.useFakeTimers({ toFake: ["Date"] });
     try {
-      await store.set("print-tokens:t1", { accountId: "acc-a" }, 600);
-      expect(await store.get("print-tokens:t1")).toEqual({ accountId: "acc-a" });
+      await store.set("authorizations:s1", { status: "pending" }, 600);
+      expect(await store.get("authorizations:s1")).toEqual({ status: "pending" });
       vi.setSystemTime(Date.now() + 601 * 1000);
-      expect(await store.get("print-tokens:t1")).toBeUndefined();
+      expect(await store.get("authorizations:s1")).toBeUndefined();
     } finally {
       vi.useRealTimers();
     }
