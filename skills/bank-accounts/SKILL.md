@@ -22,9 +22,12 @@ returns nothing, or not the bank the user means, call `listConnections`: a conne
    `psuType: "business"` only for a business account.
 2. Call `startAuthorization` once. The **Connect bank** widget shows a button that opens the bank
    login. If no widget is shown, give the user the returned `url` as a link.
-3. Tell the user to log in at their bank, approve access, and come back. Do not call
-   `startAuthorization` again while they are doing this: each call creates a new, separate login.
-4. When the user says they are done, call `getAuthorizationResult` with the `authorizationId`:
+3. Tell the user to log in at their bank and approve access. The widget notices when they are
+   done and sends a message for them ("I have connected …"); without the widget, ask them to come
+   back and say so. Do not call `startAuthorization` again while they are doing this: each call
+   creates a new, separate login.
+4. When that message comes, or the user says they are done, call `getAuthorizationResult` with
+   the `authorizationId`:
    - `connected`: the bank's `accounts` are connected; they are now also in `listAccounts`.
    - `pending`: the user has not finished yet. Ask them to complete the login, then check again.
      Do not poll in a loop.

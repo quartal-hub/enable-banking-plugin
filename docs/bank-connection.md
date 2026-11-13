@@ -20,7 +20,7 @@ connection ids only.
 | Account data | `src/enable-banking/AccountData.ts` | Balances, transactions and statements from Enable Banking, for an account already checked to be the user's. |
 | Tools | `src/tools/EnableBanking.ts` | `listBanks`, `startAuthorization`, `getAuthorizationResult`, `listConnections`, `listAccounts`, `getBalances`, `listTransactions`, `getAccountStatement`, `disconnectBank` (and the widget-only `createStatementPrintLink`). |
 | Callback | `src/pages/enable-banking/callback.astro` | The redirect URL registered with Enable Banking. Exchanges the authorization code for a session and saves it as the user's connection. A plain Astro page (which escapes everything it renders) outside the plugin's reserved paths (`/api`, `/mcp`, `/oauth`, …). |
-| Widget | `src/components/StartAuthorization.tsx` (page `src/pages/widgets/startAuthorization.astro`) | The **Connect bank** button for `startAuthorization`: opens the bank login through the MCP host. |
+| Widget | `src/components/StartAuthorization.tsx` (page `src/pages/widgets/startAuthorization.astro`) | The **Connect bank** button for `startAuthorization`: opens the bank login through the MCP host, then checks `getAuthorizationResult` every 5 seconds for 5 minutes and tells the chat when the bank is connected. |
 
 ## Stored records
 
@@ -49,7 +49,8 @@ Agent            Plugin                           Enable Banking / bank        B
   │               getPendingAuthorization(state) → uid                           │
   │               POST /sessions {code} ───────────▶                             │
   │               saveConnection(uid, sessionId, accounts)                       │
-  │  user: "done" → getAuthorizationResult(authorizationId)                      │
+  │  widget polls getAuthorizationResult(authorizationId) every 5 s              │
+  │  widget: sendMessage("I have connected <bank>.") → the model continues       │
   │ ◀── { status: "connected", accounts }                                        │
   │ listAccounts(), then getAccountStatement / getBalances / listTransactions(accountId)
 ```
@@ -68,9 +69,16 @@ Agent            Plugin                           Enable Banking / bank        B
    the session and accounts as that user's connection, replacing an earlier connection of the
    user to the same bank, country and customer type (whose session is closed at Enable Banking).
    The page tells the user to return to the chat.
-5. The user comes back to the chat and says they are done. The model calls
-   **`getAuthorizationResult`** with the `authorizationId`; it answers only the user who started
-   the authorization (anyone else gets `notFound`), and once connected it lists the accounts.
+5. After a click on **Connect bank**, the widget calls **`getAuthorizationResult`** every 5
+   seconds for 5 minutes. Then it stops and offers a **Check again** button (another 5 minutes of
+   checks) and tells the user they can also tell the assistant; the authorization itself is kept
+   for 30 minutes, so finishing later still works. When the status is
+   no longer `pending`, it shows the outcome and sends a chat message as the user (MCP Apps
+   `ui/message`), such as "I have connected Mock ASPSP.", and the model continues by calling
+   `getAuthorizationResult` itself. A host that does not support `ui/message` gets "Tell the
+   assistant to continue" in the widget instead, and without the widget the user says they are
+   done. `getAuthorizationResult` answers only the user who started the authorization (anyone
+   else gets `notFound`), and once connected it lists the accounts.
 6. The model reads data with **`getAccountStatement(accountId)`**, **`getBalances(accountId)`** and
    **`listTransactions(accountId)`**. Each of them first resolves the account id to one of the
    user's connections; an account id that is not the user's gets the same "Unknown account id" as
