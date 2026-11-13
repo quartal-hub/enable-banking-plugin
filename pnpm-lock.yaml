@@ -18,8 +18,8 @@ importers:
         specifier: ^6.0.0
         version: 6.0.6(@types/node@22.20.5)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(yaml@2.9.1)
       '@quartal/plugin':
-        specifier: ^1.0.0
-        version: 1.0.0(@modelcontextprotocol/core@2.4.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+        specifier: ^1.1.0
+        version: 1.1.0(@modelcontextprotocol/core@2.4.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       astro:
         specifier: ^7.0.0
         version: 7.4.7(@types/node@22.20.5)(yaml@2.9.1)
@@ -719,8 +719,11 @@ packages:
   '@oxc-project/types@0.157.0':
     resolution: {integrity: sha512-95iTox1qdt6WGWce3xwNOVayByOfLaYAq+qGPpub6NWbBh9sv0GG3+zyfh9ZBCO/jVu5A0EWI+qQI7g6fevjxg==}
 
-  '@quartal/plugin-core@1.0.0':
-    resolution: {integrity: sha512-ksqgfxMndEKI8rskGXUvN1B4UK73PQ7MyUqP2R0OXTjEhPSt+CYwgzrTYqM87VeZn7CH0tiDlDljKkXR2DBsUA==}
+  '@quartal/core@1.5.1':
+    resolution: {integrity: sha512-2w0VkT7sqUSMzNb8qaD87n0DuIPc40jZQwUCRyvq4ba9IKe18Q7Bf4dRm2Gk4P3oijTCfvV8KP/HB8yWvjkZDA==}
+
+  '@quartal/plugin-core@1.1.0':
+    resolution: {integrity: sha512-D69VunGa7QoJ6C9cKnxUAzdwvJnDUvgoYvPFuq1XuooSfmqytDe7FJqZca1HHuxa/APmoXD9m6pPQSimsROhsA==}
 
   '@quartal/plugin-embed@1.0.0':
     resolution: {integrity: sha512-umb2qPLJQ0VSAGBEV4XoD2IRIBC6tjQH2ScIkLFDis6F4RMaBhHD2KxAsr6ysscvHCrjQicx9ZcL19b41UyaQg==}
@@ -733,8 +736,8 @@ packages:
       vue:
         optional: true
 
-  '@quartal/plugin@1.0.0':
-    resolution: {integrity: sha512-zY1mTfiaNJEXBXWJrdHa2IjwS7sR54eOVpWcM5541mbM3+K75AGiaLYAK+5aAm3iy0rYiKDgYnd8174dDWToyg==}
+  '@quartal/plugin@1.1.0':
+    resolution: {integrity: sha512-24MO4f4i5g8b9ZXikPhAc+6IpkqI0l0JI9I4uiEICjVgxa2J4RX+/N1WkcYTyKQZyy9bS40fnmw9TM8CSaoQVQ==}
 
   '@rolldown/binding-android-arm-eabi@1.2.16':
     resolution: {integrity: sha512-ia3DwAs0OsMGS7+IConptSiyk9pEXkOx/AbJ2n/lAGxH3QkWQus1t8d7gnAT38FCU2sQu8lUbeR6AiZFv4JxaA==}
@@ -1336,6 +1339,12 @@ packages:
 
   csstype@3.2.3:
     resolution: {integrity: sha512-z1HGKcYy2xA8AGQfwrn0PAy+PB7X/GSj3UVJW9qKyn43xWa+gl5nXmU4qqLMRzWVLFC8KusUX8T/0kCiOYpAIQ==}
+
+  dayjs-business-time@1.0.4:
+    resolution: {integrity: sha512-v/0ynVV0Ih9Qw/pqJdScVHfoIaHkxLSom8j9+jO+VUOPnxC0fj5QGpDAZ94LUFd7jBkq2UO8C1LrVY+EHFx3aA==}
+
+  dayjs@1.11.23:
+    resolution: {integrity: sha512-QDTCU0M0MxR3hQfnlDJfwekQiaanm1ubOD231u73WBckQ/fsamwRLiE2GBz6D3a/xF1NgfiDLJjXBa1hYOYTtQ==}
 
   debug@4.4.3:
     resolution: {integrity: sha512-RGwwWnwQvkVfavKVt22FGLw+xYSdzARwm0ru6DhTVA3umU5hZc28V3kO4stgYryrTlLpuvgI9GiijltAjNbcqA==}
@@ -2108,6 +2117,9 @@ packages:
   smol-toml@1.9.1:
     resolution: {integrity: sha512-j7WyPdf0CJoutMzMoPLF/bVXHtKZIT9Rb4eGeEbWw8X2t5oirjPgpL+OpaENZrILYaXqYwnVH+qgUwVbl+pUJQ==}
     engines: {node: '>= 18'}
+
+  snarkdown@2.0.0:
+    resolution: {integrity: sha512-MgL/7k/AZdXCTJiNgrO7chgDqaB9FGM/1Tvlcenenb7div6obaDATzs16JhFyHHBGodHT3B7RzRc5qk8pFhg3A==}
 
   source-map-js@1.2.2:
     resolution: {integrity: sha512-KGj/8Y43x35aZVDtt+J4mK1hoLGHULMYfSkODJNQjNDC3oW1PqPoxMwo0pLUsWM/UEGzON/NxeHywEfNXNP3Vw==}
@@ -3273,19 +3285,26 @@ snapshots:
 
   '@oxc-project/types@0.157.0': {}
 
-  '@quartal/plugin-core@1.0.0': {}
+  '@quartal/core@1.5.1':
+    dependencies:
+      dayjs: 1.11.23
+      dayjs-business-time: 1.0.4
+      snarkdown: 2.0.0
+
+  '@quartal/plugin-core@1.1.0': {}
 
   '@quartal/plugin-embed@1.0.0(react@19.3.1)':
     optionalDependencies:
       react: 19.3.1
 
-  '@quartal/plugin@1.0.0(@modelcontextprotocol/core@2.4.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)':
+  '@quartal/plugin@1.1.0(@modelcontextprotocol/core@2.4.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)':
     dependencies:
       '@hono/zod-openapi': 1.6.3(hono@4.13.17)(zod@4.6.7)
       '@modelcontextprotocol/client': 2.4.0
       '@modelcontextprotocol/ext-apps': 2.0.4(@modelcontextprotocol/client@2.4.0)(@modelcontextprotocol/core@2.4.0)(@modelcontextprotocol/server@2.4.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(zod@4.6.7)
       '@modelcontextprotocol/server': 2.4.0
-      '@quartal/plugin-core': 1.0.0
+      '@quartal/core': 1.5.1
+      '@quartal/plugin-core': 1.1.0
       '@quartal/plugin-embed': 1.0.0(react@19.3.1)
       hono: 4.13.17
       jose: 6.2.15
@@ -3928,6 +3947,12 @@ snapshots:
       css-tree: 2.2.1
 
   csstype@3.2.3: {}
+
+  dayjs-business-time@1.0.4:
+    dependencies:
+      dayjs: 1.11.23
+
+  dayjs@1.11.23: {}
 
   debug@4.4.3:
     dependencies:
@@ -4688,6 +4713,8 @@ snapshots:
   sisteransi@1.0.5: {}
 
   smol-toml@1.9.1: {}
+
+  snarkdown@2.0.0: {}
 
   source-map-js@1.2.2: {}
 

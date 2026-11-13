@@ -1,3 +1,5 @@
+minimumReleaseAgeExclude:
+  - '@quartal/plugin@1.1.0'
 # @astrojs/check's WebAssembly fallback would otherwise resolve the @emnapi/runtime peer to a
 # 2.0 beta that is incompatible with the @emnapi/core 1.x beside it (astro check crashes on load).
 overrides:

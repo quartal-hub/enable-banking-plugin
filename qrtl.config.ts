@@ -9,12 +9,8 @@ export default defineQrtlConfig({
   description: "Bank account data via Enable Banking",
   // Auth mode: "anon" (no authentication), "quartal-hub" (OAuth2 via Quartal Hub), or
   // "custom" (your own OAuth2 / OIDC server).
-  auth: {
-    mode: "custom",
-    issuer: "https://iam2026.test.qrtl.com/auth/realms/quartal",
-    scope: "quartal-hub-test",
-    audience: "https://hub.test.qrtl.com",
-  },
+  // Same issuer, scope and audience as the earlier `custom` config; required by the Hub context.
+  auth: "quartal-hub",
   // Logo and icons shown by MCP clients and the docs site can be added here too (`logo`, `icons`).
   style: { skin: SKIN_URL },
   widgets: {
