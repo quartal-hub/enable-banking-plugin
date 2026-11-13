@@ -1,57 +1,92 @@
 # Bank connection flow
 
-How a user connects a bank account through [Enable Banking](https://enablebanking.com) and how
-the plugin's tools then read accounts, balances and transactions. This describes the current,
-**anonymous** implementation (`auth: "anon"` in `qrtl.config.ts`). The plan for per-user
-authentication is in [user-authentication.md](./user-authentication.md).
+How a logged-in user connects a bank account through [Enable Banking](https://enablebanking.com)
+and how the plugin's tools then read accounts, balances and transactions. Logging in to the plugin
+itself is in [authentication.md](./authentication.md).
+
+Every tool call has a logged-in user (`ctx.uid`, the access token's `sub`). Bank connections are
+stored on the server under that user, so they survive restarts and new conversations, and the
+Enable Banking session id never leaves the server: the model works with account ids and
+connection ids only.
 
 ## Parts
 
 | Part | File | Role |
 |---|---|---|
 | API client | `src/enable-banking/EnableBankingClient.ts` | Calls `https://api.enablebanking.com` with an RS256 JWT signed by the application's private key with `jose` (`kid` = application id). The token is cached for an hour. |
-| Authorization store | `src/enable-banking/AuthorizationStore.ts` | Started authorizations keyed by the random `state` sent to the bank, and their outcome (session id and accounts, or an error). In memory, kept 30 minutes. |
-| Tools | `src/tools/EnableBanking.ts` | `listBanks`, `startAuthorization`, `getAuthorizationResult`, `listAccounts`, `getBalances`, `listTransactions`, `getAccountStatement` (and the widget-only `createStatementPrintLink`). |
-| Callback | `src/pages/enable-banking/callback.astro` | The redirect URL registered with Enable Banking. Exchanges the authorization code for a session and stores the outcome. A plain Astro page (which escapes everything it renders) outside the plugin's reserved paths (`/api`, `/mcp`, `/oauth`, …). |
+| Store | `src/enable-banking/PluginStore.ts` | Persistent key-value store over [unstorage](https://unstorage.unjs.io), with expiry. Files under `.data/` by default (`ENABLE_BANKING_DATA_DIR`). |
+| Authorization store | `src/enable-banking/AuthorizationStore.ts` | Started authorizations keyed by the random `state` sent to the bank: the user who started it, the bank, and the outcome (accounts or an error). Kept 30 minutes. |
+| Connections | `src/enable-banking/Connections.ts` | Each user's bank connections (session id, bank, accounts, validity), the account ownership check, and marking connections whose session has ended. |
+| Account data | `src/enable-banking/AccountData.ts` | Balances, transactions and statements from Enable Banking, for an account already checked to be the user's. |
+| Tools | `src/tools/EnableBanking.ts` | `listBanks`, `startAuthorization`, `getAuthorizationResult`, `listConnections`, `listAccounts`, `getBalances`, `listTransactions`, `getAccountStatement`, `disconnectBank` (and the widget-only `createStatementPrintLink`). |
+| Callback | `src/pages/enable-banking/callback.astro` | The redirect URL registered with Enable Banking. Exchanges the authorization code for a session and saves it as the user's connection. A plain Astro page (which escapes everything it renders) outside the plugin's reserved paths (`/api`, `/mcp`, `/oauth`, …). |
 | Widget | `src/components/StartAuthorization.tsx` (page `src/pages/widgets/startAuthorization.astro`) | The **Connect bank** button for `startAuthorization`: opens the bank login through the MCP host. |
+
+## Stored records
+
+| Record | Key | Contents | Lifetime |
+|---|---|---|---|
+| Started authorization | `authorizations:<state>` | user id, bank, country, customer type, requested validity, `authorizationId`, status, accounts or error | 30 minutes |
+| Authorization id index | `authorization-ids:<sha256(authorizationId)>` | the `state` | 30 minutes |
+| Bank connection | `connections:<sha256(uid)>:<connectionId>` | user id, session id, bank, country, customer type, accounts, status (`active`/`ended`), `validUntil`, `connectedAt` | until `validUntil`, or `disconnectBank` |
+| Print token | `print-tokens:<token>` | user id, account id, period | 10 minutes |
+
+Session ids are bank-data credentials for whoever holds the application key. They are stored
+unencrypted, so the store must not be shared with anything else.
 
 ## Flow
 
 ```
 Agent            Plugin                           Enable Banking / bank        Browser
+  │ listAccounts() → [] (nothing connected yet)     │                            │
   │ startAuthorization(bank, country)               │                            │
-  ├──────────────▶ state = createAuthorizationState │                            │
+  ├──────────────▶ state = createAuthorizationState(uid, bank, …)                │
   │               POST /auth {state, redirect_url} ─▶                            │
   │ ◀── { url, authorizationId }                    │                            │
   │  widget: Connect bank ──── openLink(url) ───────┼──────────────────────────▶ │
   │                                                 │ ◀── user logs in, approves │
   │               GET /enable-banking/callback?code&state ◀──────── redirect ─── │
-  │               getPendingAuthorization(state)                                 │
+  │               getPendingAuthorization(state) → uid                           │
   │               POST /sessions {code} ───────────▶                             │
-  │               completeAuthorization(state, sessionId, accounts)              │
+  │               saveConnection(uid, sessionId, accounts)                       │
   │  user: "done" → getAuthorizationResult(authorizationId)                      │
-  │ ◀── { status: "connected", sessionId, accounts }                             │
-  │ listAccounts(sessionId), then getAccountStatement / getBalances / listTransactions(accountId)
+  │ ◀── { status: "connected", accounts }                                        │
+  │ listAccounts(), then getAccountStatement / getBalances / listTransactions(accountId)
 ```
 
-1. **`startAuthorization`** creates a random `state`, calls `POST /auth` with the redirect URL and
-   90 days of access, links Enable Banking's `authorization_id` to the `state`, and returns the
-   bank login `url` and the `authorizationId`.
-2. The **Connect bank** widget opens the URL through the MCP host (`openLink`, falling back to
+1. The model calls **`listAccounts`** first: it returns the accounts of every bank the user has
+   connected, in any earlier conversation. Only when the bank is missing does it connect one.
+2. **`startAuthorization`** creates a random `state`, stores it with the user's id, calls
+   `POST /auth` with the redirect URL and 90 days of access, links Enable Banking's
+   `authorization_id` to the `state`, and returns the bank login `url` and the `authorizationId`.
+3. The **Connect bank** widget opens the URL through the MCP host (`openLink`, falling back to
    `window.open`). The user logs in to the bank and approves access.
-3. The bank redirects the browser to **`/enable-banking/callback?code=…&state=…`** (or `error=…`).
-   The callback accepts only a pending, unexpired `state` (so each callback URL works once),
-   exchanges the code with `POST /sessions`, and stores the session id and accounts, or the error,
-   under that `state`. The page tells the user to return to the chat; it does not show the
-   session id.
-4. The user comes back to the chat and says they are done. The model calls
-   **`getAuthorizationResult`** with the `authorizationId`; once the status is `connected`, the
-   result has the session id and the accounts.
-5. The model reads data with **`listAccounts(sessionId)`**, then **`getAccountStatement(accountId)`**,
-   **`getBalances(accountId)`** and **`listTransactions(accountId)`** with the account ids it returned.
+4. The bank redirects the browser to **`/enable-banking/callback?code=…&state=…`** (or `error=…`).
+   The redirect carries no bearer token: the user is the one stored with the `state`, which the
+   plugin itself created, is random, works once and expires in 30 minutes. Nothing else in the
+   URL is trusted for identity. The callback exchanges the code with `POST /sessions` and saves
+   the session and accounts as that user's connection, replacing an earlier connection of the
+   user to the same bank, country and customer type (whose session is closed at Enable Banking).
+   The page tells the user to return to the chat.
+5. The user comes back to the chat and says they are done. The model calls
+   **`getAuthorizationResult`** with the `authorizationId`; it answers only the user who started
+   the authorization (anyone else gets `notFound`), and once connected it lists the accounts.
+6. The model reads data with **`getAccountStatement(accountId)`**, **`getBalances(accountId)`** and
+   **`listTransactions(accountId)`**. Each of them first resolves the account id to one of the
+   user's connections; an account id that is not the user's gets the same "Unknown account id" as
+   one that does not exist, and Enable Banking is not called.
 
 `getAuthorizationResult` statuses: `pending` (user not back yet), `connected`, `failed`, and
-`notFound` (wrong id, or older than 30 minutes).
+`notFound` (wrong id, another user's id, or older than 30 minutes).
+
+**`listConnections`** lists the user's banks with their status and validity, and
+**`disconnectBank(connectionId)`** closes the session at Enable Banking (`DELETE /sessions/{id}`)
+and deletes the connection.
+
+The printable statement page (`/enable-banking/statement?token=…`) is opened in a plain browser
+tab without a bearer token. `createStatementPrintLink` checks the account like the other tools
+and stores the user with the token; the page checks again that the account is that user's before
+building the statement.
 
 ## Errors
 
@@ -59,17 +94,19 @@ Agent            Plugin                           Enable Banking / bank        B
 (`{ code, error, message }`) into messages for the agent, which MCP clients receive as tool
 execution errors (`isError: true`):
 
-| Enable Banking | Message to the agent |
+| Situation | Message to the agent |
 |---|---|
-| 401 with a `*_SESSION` code (e.g. `CLOSED_SESSION`) on account calls | "The bank connection has ended … connect their bank again" |
-| Session status other than `AUTHORIZED` (e.g. `CLOSED`) in `listAccounts`: a closed session still answers `GET /sessions/{id}` | the same |
-| 404 `SESSION_DOES_NOT_EXIST` / `ACCOUNT_DOES_NOT_EXIST` | "Unknown session id" / "Unknown account id" |
-| 422 `WRONG_REQUEST_PARAMETERS` | "Invalid request … check the ids and dates" |
+| No logged-in user (`auth: "anon"`, or no `ctx.uid`) | "Not logged in …" |
+| Account id that is not one of the user's accounts | "Unknown account id. Use an account uid from listAccounts." |
+| Enable Banking: 401 with a `*_SESSION` code (e.g. `CLOSED_SESSION`), or 404 `SESSION_DOES_NOT_EXIST` | "The bank connection has ended … connect their bank again"; the connection is marked `ended` |
+| Account of a connection marked `ended` | "The connection to <bank> has ended …", without calling Enable Banking |
+| Enable Banking: 404 `ACCOUNT_DOES_NOT_EXIST` | "Unknown account id" |
+| Enable Banking: 422 `WRONG_REQUEST_PARAMETERS` | "Invalid request … check the ids and dates" |
 | anything else | the method, path, status and Enable Banking's message |
 
-Verified in the sandbox by revoking a session (`DELETE /sessions/{id}`). An expired session is
-assumed to behave the same way (another non-`AUTHORIZED` status, another `*_SESSION` code); it was
-not observed, since sandbox sessions last 90 days.
+The `*_SESSION` behaviour was verified in the sandbox by revoking a session
+(`DELETE /sessions/{id}`). An expired session is assumed to behave the same way; it was not
+observed, since sandbox sessions last 90 days.
 
 ## Setup, sandbox data and limitations
 

@@ -1,8 +1,30 @@
 # Plan: per-user authentication
 
-How to replace the anonymous bank connection flow ([bank-connection.md](./bank-connection.md))
-with one where every request has an authenticated user, bank sessions are stored per user on the
-server, and the session id never reaches the model. Also lists what code can then be removed.
+> **Implemented.** The current flow is described in [bank-connection.md](./bank-connection.md).
+> This plan is kept for its reasoning. Where the implementation differs:
+>
+> - **Store:** instead of a `ConnectionStore` with one method per record, a small key-value
+>   `PluginStore` with expiry (`src/enable-banking/PluginStore.ts`) over
+>   [unstorage](https://unstorage.unjs.io), with the record logic in `AuthorizationStore.ts`,
+>   `Connections.ts` and `PrintLinks.ts`. The backend is unstorage's `fs` driver (files under
+>   `.data/`); another driver (Redis, Cloudflare KV, …) is a one-line change in
+>   `getPluginStore()` once the hosting target is chosen.
+> - **No encryption at rest:** session ids are stored as they are; the store must stay private to
+>   the plugin.
+> - **Connection ids:** connections get a random `connectionId` of their own, used by
+>   `listConnections`, `disconnectBank` and an optional filter of `listAccounts`.
+> - **Reconnecting** to the same bank, country and customer type replaces the earlier connection
+>   and closes its session at Enable Banking, so accounts are not listed twice.
+> - **Ended sessions** are kept as `status: "ended"` connections (shown by `listConnections`,
+>   left out of `listAccounts`) until their validity runs out or the user disconnects.
+> - **Auth mode** stays `custom` with the Quartal test Keycloak ([authentication.md](./authentication.md)),
+>   not `quartal-hub`.
+> - **Testing:** the two-user, restart and ended-session cases are unit tests
+>   (`test/userConnections.test.ts`); an end-to-end run with two Keycloak users is still to do.
+
+How to replace the anonymous bank connection flow with one where every request has an
+authenticated user, bank sessions are stored per user on the server, and the session id never
+reaches the model. Also lists what code can then be removed.
 
 ## Goal
 
